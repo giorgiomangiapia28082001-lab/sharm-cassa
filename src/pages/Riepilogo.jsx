@@ -9,7 +9,7 @@ export default function Riepilogo() {
   const [loading, setLoading] = useState(true)
   const [incassi, setIncassi] = useState([])
   const [uscite, setUscite] = useState([])
-  const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60, eur_gbp: 0.85 })
+  const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
   const [dataInizio, setDataInizio] = useState(inizioMese())
   const [dataFine, setDataFine] = useState(oggi())
 
@@ -28,33 +28,35 @@ export default function Riepilogo() {
 
   useEffect(() => { carica() }, [dataInizio, dataFine])
 
-  // Totali per valuta — incassi
-  const totIncassiEur = incassi.reduce((a, r) => a + Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici) + Number(r.delivery), 0)
-  const totIncassiGbp = incassi.reduce((a, r) => a + Number(r.gbp_pos) + Number(r.gbp_contanti), 0)
+  // Totali per valuta — incassi di sala
+  const totIncassiEur = incassi.reduce((a, r) => a + Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici), 0)
   const totIncassiUsd = incassi.reduce((a, r) => a + Number(r.usd_contanti), 0)
-  const totIncassiEgp = incassi.reduce((a, r) => a + Number(r.egp_contanti), 0)
+  const totIncassiEgp = incassi.reduce((a, r) => a + Number(r.egp_pos) + Number(r.egp_contanti), 0)
+
+  // Totali delivery (campi dentro incassi)
+  const totDeliveryEur = incassi.reduce((a, r) => a + Number(r.delivery_eur || 0), 0)
+  const totDeliveryEgp = incassi.reduce((a, r) => a + Number(r.delivery_egp || 0), 0)
 
   // Totali per valuta — uscite
   const totUsciteEur = uscite.filter((u) => u.valuta === 'EUR').reduce((a, u) => a + Number(u.importo), 0)
-  const totUsciteGbp = uscite.filter((u) => u.valuta === 'GBP').reduce((a, u) => a + Number(u.importo), 0)
   const totUsciteUsd = uscite.filter((u) => u.valuta === 'USD').reduce((a, u) => a + Number(u.importo), 0)
   const totUsciteEgp = uscite.filter((u) => u.valuta === 'EGP').reduce((a, u) => a + Number(u.importo), 0)
 
   // Conversione in EUR per il totale complessivo
   const eurUsdRate = Number(tassi.eur_usd) || 1
   const eurEgpRate = Number(tassi.eur_egp) || 1
-  const eurGbpRate = Number(tassi.eur_gbp) || 1
 
-  const incassiInEur = totIncassiEur + (totIncassiUsd / eurUsdRate) + (totIncassiEgp / eurEgpRate) + (totIncassiGbp / eurGbpRate)
-  const usciteInEur = totUsciteEur + (totUsciteUsd / eurUsdRate) + (totUsciteEgp / eurEgpRate) + (totUsciteGbp / eurGbpRate)
+  const incassiInEur = totIncassiEur + totDeliveryEur + (totIncassiUsd / eurUsdRate) + ((totIncassiEgp + totDeliveryEgp) / eurEgpRate)
+  const usciteInEur = totUsciteEur + (totUsciteUsd / eurUsdRate) + (totUsciteEgp / eurEgpRate)
   const nettoInEur = incassiInEur - usciteInEur
 
   // Serie giornaliera per il grafico
   const giorniMap = {}
   incassi.forEach((r) => {
     const giorno = r.data
-    const valoreEur = Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici) + Number(r.delivery)
-      + Number(r.usd_contanti) / eurUsdRate + Number(r.egp_contanti) / eurEgpRate + (Number(r.gbp_pos) + Number(r.gbp_contanti)) / eurGbpRate
+    const valoreEur = Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici) + Number(r.delivery_eur || 0)
+      + Number(r.usd_contanti) / eurUsdRate
+      + (Number(r.egp_pos) + Number(r.egp_contanti) + Number(r.delivery_egp || 0)) / eurEgpRate
     giorniMap[giorno] = giorniMap[giorno] || { data: giorno, incassi: 0, uscite: 0 }
     giorniMap[giorno].incassi += valoreEur
   })
@@ -63,7 +65,6 @@ export default function Riepilogo() {
     let valoreEur = Number(u.importo)
     if (u.valuta === 'USD') valoreEur = valoreEur / eurUsdRate
     if (u.valuta === 'EGP') valoreEur = valoreEur / eurEgpRate
-    if (u.valuta === 'GBP') valoreEur = valoreEur / eurGbpRate
     giorniMap[giorno] = giorniMap[giorno] || { data: giorno, incassi: 0, uscite: 0 }
     giorniMap[giorno].uscite += valoreEur
   })
@@ -80,7 +81,7 @@ export default function Riepilogo() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Riepilogo cassa</h1>
-          <p className="page-subtitle">Vista d'insieme su incassi, uscite e netto del periodo selezionato.</p>
+          <p className="page-subtitle">Vista d'insieme su incassi, delivery, uscite e netto del periodo selezionato.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="date" value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid var(--linea)' }} />
@@ -99,6 +100,10 @@ export default function Riepilogo() {
               <div className="stat-value positivo">€ {incassiInEur.toFixed(2)}</div>
             </div>
             <div className="stat-card">
+              <div className="stat-label">di cui Delivery (≈ EUR)</div>
+              <div className="stat-value">€ {(totDeliveryEur + totDeliveryEgp / eurEgpRate).toFixed(2)}</div>
+            </div>
+            <div className="stat-card">
               <div className="stat-label">Uscite totali (≈ EUR)</div>
               <div className="stat-value negativo">€ {usciteInEur.toFixed(2)}</div>
             </div>
@@ -110,8 +115,7 @@ export default function Riepilogo() {
               <div className="stat-label">Cambio in uso</div>
               <div style={{ fontSize: 13.5, color: 'var(--inchiostro-soft)', marginTop: 4, lineHeight: 1.6 }}>
                 1€ = {eurUsdRate} $<br />
-                1€ = {eurEgpRate} LE<br />
-                1€ = {eurGbpRate} £
+                1€ = {eurEgpRate} LE
               </div>
             </div>
           </div>
@@ -137,7 +141,8 @@ export default function Riepilogo() {
               <thead>
                 <tr>
                   <th>Valuta</th>
-                  <th>Entrate</th>
+                  <th>Entrate sala</th>
+                  <th>Entrate delivery</th>
                   <th>Uscite</th>
                   <th>Netto</th>
                 </tr>
@@ -146,26 +151,23 @@ export default function Riepilogo() {
                 <tr>
                   <td><span className="tag">EUR</span></td>
                   <td>€ {totIncassiEur.toFixed(2)}</td>
+                  <td>€ {totDeliveryEur.toFixed(2)}</td>
                   <td>€ {totUsciteEur.toFixed(2)}</td>
-                  <td className={totIncassiEur - totUsciteEur >= 0 ? '' : ''}>€ {(totIncassiEur - totUsciteEur).toFixed(2)}</td>
-                </tr>
-                <tr>
-                  <td><span className="tag">GBP</span></td>
-                  <td>£ {totIncassiGbp.toFixed(2)}</td>
-                  <td>£ {totUsciteGbp.toFixed(2)}</td>
-                  <td>£ {(totIncassiGbp - totUsciteGbp).toFixed(2)}</td>
-                </tr>
-                <tr>
-                  <td><span className="tag">USD</span></td>
-                  <td>$ {totIncassiUsd.toFixed(2)}</td>
-                  <td>$ {totUsciteUsd.toFixed(2)}</td>
-                  <td>$ {(totIncassiUsd - totUsciteUsd).toFixed(2)}</td>
+                  <td>€ {(totIncassiEur + totDeliveryEur - totUsciteEur).toFixed(2)}</td>
                 </tr>
                 <tr>
                   <td><span className="tag">EGP</span></td>
                   <td>{totIncassiEgp.toFixed(0)} LE</td>
+                  <td>{totDeliveryEgp.toFixed(0)} LE</td>
                   <td>{totUsciteEgp.toFixed(0)} LE</td>
-                  <td>{(totIncassiEgp - totUsciteEgp).toFixed(0)} LE</td>
+                  <td>{(totIncassiEgp + totDeliveryEgp - totUsciteEgp).toFixed(0)} LE</td>
+                </tr>
+                <tr>
+                  <td><span className="tag">USD</span></td>
+                  <td>$ {totIncassiUsd.toFixed(2)}</td>
+                  <td>—</td>
+                  <td>$ {totUsciteUsd.toFixed(2)}</td>
+                  <td>$ {(totIncassiUsd - totUsciteUsd).toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>

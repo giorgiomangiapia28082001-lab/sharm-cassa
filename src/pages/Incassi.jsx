@@ -9,11 +9,11 @@ const VUOTO = {
   eur_contanti: '',
   fondo_cassa: '',
   bonifici: '',
-  gbp_pos: '',
-  gbp_contanti: '',
+  egp_pos: '',
   usd_contanti: '',
   egp_contanti: '',
-  delivery: '',
+  delivery_eur: '',
+  delivery_egp: '',
   numero_persone: '',
   note: '',
 }
@@ -53,11 +53,11 @@ export default function Incassi() {
       eur_contanti: Number(form.eur_contanti) || 0,
       fondo_cassa: Number(form.fondo_cassa) || 0,
       bonifici: Number(form.bonifici) || 0,
-      gbp_pos: Number(form.gbp_pos) || 0,
-      gbp_contanti: Number(form.gbp_contanti) || 0,
+      egp_pos: Number(form.egp_pos) || 0,
       usd_contanti: Number(form.usd_contanti) || 0,
       egp_contanti: Number(form.egp_contanti) || 0,
-      delivery: Number(form.delivery) || 0,
+      delivery_eur: Number(form.delivery_eur) || 0,
+      delivery_egp: Number(form.delivery_egp) || 0,
       numero_persone: Number(form.numero_persone) || 0,
       note: form.note || null,
       inserito_da: profile.id,
@@ -79,7 +79,7 @@ export default function Incassi() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Incassi serata</h1>
-          <p className="page-subtitle">Registra l'incasso di ogni serata, diviso per valuta e metodo di pagamento.</p>
+          <p className="page-subtitle">Registra l'incasso di sala e il delivery di ogni serata, diviso per valuta.</p>
         </div>
         {puoInserire && (
           <button className="btn btn-primary" onClick={() => setMostraForm((v) => !v)}>
@@ -117,23 +117,19 @@ export default function Incassi() {
               <label>Bonifici €</label>
               <input type="number" step="0.01" value={form.bonifici} onChange={(e) => update('bonifici', e.target.value)} placeholder="0.00" />
             </div>
-            <div className="field">
-              <label>Delivery €</label>
-              <input type="number" step="0.01" value={form.delivery} onChange={(e) => update('delivery', e.target.value)} placeholder="0.00" />
-            </div>
           </div>
 
           <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
-            Sterline (GBP) — unica valuta accettata su POS
+            Lire egiziane (EGP) — valuta principale
           </h3>
           <div className="form-grid">
             <div className="field">
-              <label>POS £</label>
-              <input type="number" step="0.01" value={form.gbp_pos} onChange={(e) => update('gbp_pos', e.target.value)} placeholder="0.00" />
+              <label>POS (carta) LE</label>
+              <input type="number" step="0.01" value={form.egp_pos} onChange={(e) => update('egp_pos', e.target.value)} placeholder="0.00" />
             </div>
             <div className="field">
-              <label>Contanti £</label>
-              <input type="number" step="0.01" value={form.gbp_contanti} onChange={(e) => update('gbp_contanti', e.target.value)} placeholder="0.00" />
+              <label>Contanti LE</label>
+              <input type="number" step="0.01" value={form.egp_contanti} onChange={(e) => update('egp_contanti', e.target.value)} placeholder="0.00" />
             </div>
           </div>
 
@@ -145,9 +141,19 @@ export default function Incassi() {
               <label>Dollari $ (contanti)</label>
               <input type="number" step="0.01" value={form.usd_contanti} onChange={(e) => update('usd_contanti', e.target.value)} placeholder="0.00" />
             </div>
+          </div>
+
+          <h3 style={{ fontSize: 15, color: 'var(--corallo)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700, borderTop: '1px dashed var(--linea)', paddingTop: 18 }}>
+            Delivery (separato dalla sala)
+          </h3>
+          <div className="form-grid">
             <div className="field">
-              <label>Lire egiziane LE (contanti)</label>
-              <input type="number" step="0.01" value={form.egp_contanti} onChange={(e) => update('egp_contanti', e.target.value)} placeholder="0.00" />
+              <label>Delivery €</label>
+              <input type="number" step="0.01" value={form.delivery_eur} onChange={(e) => update('delivery_eur', e.target.value)} placeholder="0.00" />
+            </div>
+            <div className="field">
+              <label>Delivery LE</label>
+              <input type="number" step="0.01" value={form.delivery_egp} onChange={(e) => update('delivery_egp', e.target.value)} placeholder="0.00" />
             </div>
           </div>
 
@@ -178,11 +184,13 @@ export default function Incassi() {
               <tr>
                 <th>Data</th>
                 <th>€ Contanti</th>
-                <th>£ POS</th>
-                <th>£ Cont.</th>
-                <th>$ Cont.</th>
-                <th>LE Cont.</th>
-                <th>Delivery</th>
+                <th>€ Fondo cassa</th>
+                <th>€ Bonifici</th>
+                <th>LE POS</th>
+                <th>LE Contanti</th>
+                <th>$ Contanti</th>
+                <th>Delivery €</th>
+                <th>Delivery LE</th>
                 <th>Persone</th>
                 <th>Inserito da</th>
               </tr>
@@ -192,11 +200,13 @@ export default function Incassi() {
                 <tr key={r.id}>
                   <td>{new Date(r.data).toLocaleDateString('it-IT')}</td>
                   <td>€ {Number(r.eur_contanti).toFixed(2)}</td>
-                  <td>£ {Number(r.gbp_pos).toFixed(2)}</td>
-                  <td>£ {Number(r.gbp_contanti).toFixed(2)}</td>
-                  <td>$ {Number(r.usd_contanti).toFixed(2)}</td>
+                  <td>€ {Number(r.fondo_cassa).toFixed(2)}</td>
+                  <td>€ {Number(r.bonifici).toFixed(2)}</td>
+                  <td>{Number(r.egp_pos).toFixed(0)} LE</td>
                   <td>{Number(r.egp_contanti).toFixed(0)} LE</td>
-                  <td>€ {Number(r.delivery).toFixed(2)}</td>
+                  <td>$ {Number(r.usd_contanti).toFixed(2)}</td>
+                  <td>€ {Number(r.delivery_eur || 0).toFixed(2)}</td>
+                  <td>{Number(r.delivery_egp || 0).toFixed(0)} LE</td>
                   <td>{r.numero_persone}</td>
                   <td style={{ color: 'var(--inchiostro-soft)' }}>{r.profiles?.nome || '—'}</td>
                 </tr>

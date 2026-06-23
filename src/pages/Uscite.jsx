@@ -91,7 +91,7 @@ export default function Uscite() {
     ? righe.filter((r) => r.categoria_id === filtroCategoria)
     : righe
 
-  const simboloValuta = { EUR: '€', USD: '$', EGP: 'LE', GBP: '£' }
+  const simboloValuta = { EUR: '€', USD: '$', EGP: 'LE' }
 
   return (
     <div>
@@ -135,7 +135,6 @@ export default function Uscite() {
                 <option value="EGP">Lire egiziane (LE)</option>
                 <option value="EUR">Euro (€)</option>
                 <option value="USD">Dollari ($)</option>
-                <option value="GBP">Sterline (£)</option>
               </select>
             </div>
             <div className="field">

@@ -4,7 +4,7 @@ import { useAuth } from '../lib/AuthContext'
 
 export default function Impostazioni() {
   const { profile } = useAuth()
-  const [tassi, setTassi] = useState({ eur_usd: '', eur_egp: '', eur_gbp: '' })
+  const [tassi, setTassi] = useState({ eur_usd: '', eur_egp: '' })
   const [categorie, setCategorie] = useState([])
   const [nuovaCategoria, setNuovaCategoria] = useState('')
   const [salvandoTassi, setSalvandoTassi] = useState(false)
@@ -13,7 +13,7 @@ export default function Impostazioni() {
   async function carica() {
     const { data: t } = await supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1)
     if (t && t.length) {
-      setTassi({ eur_usd: t[0].eur_usd, eur_egp: t[0].eur_egp, eur_gbp: t[0].eur_gbp })
+      setTassi({ eur_usd: t[0].eur_usd, eur_egp: t[0].eur_egp })
     }
     const { data: c } = await supabase.from('categorie_uscite').select('*').order('ordine')
     setCategorie(c || [])
@@ -27,7 +27,6 @@ export default function Impostazioni() {
     const { error } = await supabase.from('tassi_cambio').insert({
       eur_usd: Number(tassi.eur_usd),
       eur_egp: Number(tassi.eur_egp),
-      eur_gbp: Number(tassi.eur_gbp),
       created_by: profile.id,
     })
     setSalvandoTassi(false)
@@ -71,10 +70,6 @@ export default function Impostazioni() {
             <div className="field">
               <label>1 € = ? LE (Lire egiziane)</label>
               <input type="number" step="0.0001" value={tassi.eur_egp} onChange={(e) => setTassi((t) => ({ ...t, eur_egp: e.target.value }))} required />
-            </div>
-            <div className="field">
-              <label>1 € = ? £ (Sterline)</label>
-              <input type="number" step="0.0001" value={tassi.eur_gbp} onChange={(e) => setTassi((t) => ({ ...t, eur_gbp: e.target.value }))} required />
             </div>
           </div>
           <button type="submit" className="btn btn-accent" style={{ marginTop: 16 }} disabled={salvandoTassi}>

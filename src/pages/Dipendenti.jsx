@@ -22,6 +22,11 @@ export default function Dipendenti() {
   const [accontoForm, setAccontoForm] = useState({ importo_eur: '', importo_egp: '', note: '' })
   const [salvandoAcconto, setSalvandoAcconto] = useState(false)
 
+  // form modifica foto/contatti — disponibile anche all'operatore
+  const [contattoForm, setContattoForm] = useState({ telefono: '', note_operatore: '', foto: null })
+  const [editandoContatti, setEditandoContatti] = useState(null)
+  const [salvandoContatti, setSalvandoContatti] = useState(false)
+
   const puoSegnare = isMaster || profile?.ruolo === 'operatore'
 
   async function carica() {
