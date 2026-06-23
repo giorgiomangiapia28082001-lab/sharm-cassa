@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Layout from './pages/Layout'
 import Riepilogo from './pages/Riepilogo'
 import Incassi from './pages/Incassi'
+import Delivery from './pages/Delivery'
 import Uscite from './pages/Uscite'
 import Dipendenti from './pages/Dipendenti'
 import Soci from './pages/Soci'
@@ -42,6 +43,7 @@ function RotteProtette() {
       <Route path="/" element={<Layout />}>
         <Route index element={<Riepilogo />} />
         <Route path="incassi" element={<Incassi />} />
+        <Route path="delivery" element={<Delivery />} />
         <Route path="uscite" element={<Uscite />} />
         <Route path="dipendenti" element={<Dipendenti />} />
         <Route
