@@ -8,7 +8,6 @@ const inizioMese = () => { const d = new Date(); d.setDate(1); return d.toISOStr
 export default function Riepilogo() {
   const [loading, setLoading] = useState(true)
   const [incassi, setIncassi] = useState([])
-  const [deliveryRighe, setDeliveryRighe] = useState([])
   const [uscite, setUscite] = useState([])
   const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
   const [dataInizio, setDataInizio] = useState(inizioMese())
@@ -16,14 +15,12 @@ export default function Riepilogo() {
 
   async function carica() {
     setLoading(true)
-    const [{ data: inc }, { data: del }, { data: usc }, { data: t }] = await Promise.all([
+    const [{ data: inc }, { data: usc }, { data: t }] = await Promise.all([
       supabase.from('incassi').select('*').gte('data', dataInizio).lte('data', dataFine).order('data'),
-      supabase.from('delivery').select('*').gte('data', dataInizio).lte('data', dataFine).order('data'),
       supabase.from('uscite').select('*').gte('data', dataInizio).lte('data', dataFine),
       supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1),
     ])
     setIncassi(inc || [])
-    setDeliveryRighe(del || [])
     setUscite(usc || [])
     if (t && t.length) setTassi(t[0])
     setLoading(false)
@@ -36,9 +33,9 @@ export default function Riepilogo() {
   const totIncassiUsd = incassi.reduce((a, r) => a + Number(r.usd_contanti), 0)
   const totIncassiEgp = incassi.reduce((a, r) => a + Number(r.egp_pos) + Number(r.egp_contanti), 0)
 
-  // Totali delivery (separato)
-  const totDeliveryEur = deliveryRighe.reduce((a, r) => a + Number(r.importo_eur), 0)
-  const totDeliveryEgp = deliveryRighe.reduce((a, r) => a + Number(r.importo_egp), 0)
+  // Totali delivery (campi dentro incassi)
+  const totDeliveryEur = incassi.reduce((a, r) => a + Number(r.delivery_eur || 0), 0)
+  const totDeliveryEgp = incassi.reduce((a, r) => a + Number(r.delivery_egp || 0), 0)
 
   // Totali per valuta — uscite
   const totUsciteEur = uscite.filter((u) => u.valuta === 'EUR').reduce((a, u) => a + Number(u.importo), 0)
@@ -57,14 +54,9 @@ export default function Riepilogo() {
   const giorniMap = {}
   incassi.forEach((r) => {
     const giorno = r.data
-    const valoreEur = Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici)
-      + Number(r.usd_contanti) / eurUsdRate + (Number(r.egp_pos) + Number(r.egp_contanti)) / eurEgpRate
-    giorniMap[giorno] = giorniMap[giorno] || { data: giorno, incassi: 0, uscite: 0 }
-    giorniMap[giorno].incassi += valoreEur
-  })
-  deliveryRighe.forEach((r) => {
-    const giorno = r.data
-    const valoreEur = Number(r.importo_eur) + Number(r.importo_egp) / eurEgpRate
+    const valoreEur = Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici) + Number(r.delivery_eur || 0)
+      + Number(r.usd_contanti) / eurUsdRate
+      + (Number(r.egp_pos) + Number(r.egp_contanti) + Number(r.delivery_egp || 0)) / eurEgpRate
     giorniMap[giorno] = giorniMap[giorno] || { data: giorno, incassi: 0, uscite: 0 }
     giorniMap[giorno].incassi += valoreEur
   })
