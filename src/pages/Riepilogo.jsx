@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 const oggi = () => new Date().toISOString().slice(0, 10)
 const inizioMese = () => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10) }
+const primoGiornoMese = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10) }
 
 export default function Riepilogo() {
   const [loading, setLoading] = useState(true)
@@ -12,6 +14,17 @@ export default function Riepilogo() {
   const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
   const [dataInizio, setDataInizio] = useState(inizioMese())
   const [dataFine, setDataFine] = useState(oggi())
+  const [speseFisseNonPagate, setSpeseFisseNonPagate] = useState([])
+
+  async function caricaSpeseFisse() {
+    const mese = primoGiornoMese()
+    const [{ data: voci }, { data: pagamenti }] = await Promise.all([
+      supabase.from('spese_fisse').select('*').eq('attiva', true),
+      supabase.from('pagamenti_spese_fisse').select('spesa_fissa_id').eq('mese', mese),
+    ])
+    const pagateIds = new Set((pagamenti || []).map((p) => p.spesa_fissa_id))
+    setSpeseFisseNonPagate((voci || []).filter((v) => !pagateIds.has(v.id)))
+  }
 
   async function carica() {
     setLoading(true)
@@ -26,7 +39,7 @@ export default function Riepilogo() {
     setLoading(false)
   }
 
-  useEffect(() => { carica() }, [dataInizio, dataFine])
+  useEffect(() => { carica(); caricaSpeseFisse() }, [dataInizio, dataFine])
 
   // Totali per valuta — incassi di sala
   const totIncassiEur = incassi.reduce((a, r) => a + Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici), 0)
@@ -78,6 +91,21 @@ export default function Riepilogo() {
 
   return (
     <div>
+      {speseFisseNonPagate.length > 0 && (
+        <div className="card" style={{ marginBottom: 22, borderColor: 'rgba(217,104,79,0.4)', background: 'rgba(217,104,79,0.06)', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 20 }}>⏲</div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontWeight: 700, color: 'var(--corallo)', fontSize: 14.5 }}>
+              {speseFisseNonPagate.length === 1 ? '1 spesa fissa da pagare questo mese' : `${speseFisseNonPagate.length} spese fisse da pagare questo mese`}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
+              {speseFisseNonPagate.map((v) => v.nome).join(' · ')}
+            </div>
+          </div>
+          <Link to="/spese-fisse" className="btn btn-accent btn-sm">Vai a Spese fisse</Link>
+        </div>
+      )}
+
       <div className="page-header">
         <div>
           <h1 className="page-title">Riepilogo cassa</h1>

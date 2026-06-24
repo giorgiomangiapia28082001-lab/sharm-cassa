@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { to: '/', icon: '◈', label: 'Riepilogo', roles: ['master', 'operatore', 'viewer'] },
   { to: '/incassi', icon: '€', label: 'Incassi serata', roles: ['master', 'operatore', 'viewer'] },
   { to: '/uscite', icon: '↓', label: 'Uscite', roles: ['master', 'operatore', 'viewer'] },
+  { to: '/spese-fisse', icon: '⏲', label: 'Spese fisse', roles: ['master', 'operatore', 'viewer'] },
   { to: '/dipendenti', icon: '◐', label: 'Dipendenti', roles: ['master', 'operatore', 'viewer'] },
   { to: '/soci', icon: '◆', label: 'Spese soci', roles: ['master', 'viewer'] },
   { to: '/impostazioni', icon: '⚙', label: 'Impostazioni', roles: ['master'] },
