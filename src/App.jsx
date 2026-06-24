@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './lib/AuthContext'
 import Login from './pages/Login'
 import Layout from './pages/Layout'
 import Riepilogo from './pages/Riepilogo'
+import Cassa from './pages/Cassa'
 import Incassi from './pages/Incassi'
 import SpeseFisse from './pages/SpeseFisse'
 import Uscite from './pages/Uscite'
@@ -42,6 +43,7 @@ function RotteProtette() {
     <Routes>
       <Route path="/" element={<Layout />}>
         <Route index element={<Riepilogo />} />
+        <Route path="cassa" element={<Cassa />} />
         <Route path="incassi" element={<Incassi />} />
         <Route path="spese-fisse" element={<SpeseFisse />} />
         <Route path="uscite" element={<Uscite />} />
