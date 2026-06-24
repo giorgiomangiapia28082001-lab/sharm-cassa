@@ -22,10 +22,10 @@ export default function Dipendenti() {
   const [accontoForm, setAccontoForm] = useState({ importo_eur: '', importo_egp: '', note: '', erogato_da: 'direttore' })
   const [salvandoAcconto, setSalvandoAcconto] = useState(false)
 
-  // form modifica foto/contatti — disponibile anche all'operatore
-  const [contattoForm, setContattoForm] = useState({ telefono: '', note_operatore: '', foto: null })
-  const [editandoContatti, setEditandoContatti] = useState(null)
-  const [salvandoContatti, setSalvandoContatti] = useState(false)
+  // form modifica dipendente — solo Master, tutti i campi
+  const [editForm, setEditForm] = useState({ nome: '', ruolo_lavoro: '', data_inizio: '', stipendio_eur: '', stipendio_egp: '', foto: null, foto_url_attuale: null })
+  const [editandoDipendente, setEditandoDipendente] = useState(null)
+  const [salvandoEdit, setSalvandoEdit] = useState(false)
 
   const puoSegnare = isMaster || profile?.ruolo === 'operatore'
 
@@ -119,6 +119,52 @@ export default function Dipendenti() {
       carica()
     } else {
       alert('Errore: ' + error.message)
+    }
+  }
+
+  function apriModifica(d) {
+    setEditForm({
+      nome: d.nome || '',
+      ruolo_lavoro: d.ruolo_lavoro || '',
+      data_inizio: d.data_inizio || '',
+      stipendio_eur: d.stipendio_eur || '',
+      stipendio_egp: d.stipendio_egp || '',
+      foto: null,
+      foto_url_attuale: d.foto_url || null,
+    })
+    setEditandoDipendente(d.id)
+  }
+
+  async function salvaModificaDipendente(e) {
+    e.preventDefault()
+    setSalvandoEdit(true)
+
+    let foto_url = editForm.foto_url_attuale
+    if (editForm.foto) {
+      const ext = editForm.foto.name.split('.').pop()
+      const path = `dipendenti/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: uploadError } = await supabase.storage.from('foto').upload(path, editForm.foto)
+      if (!uploadError) {
+        const { data } = supabase.storage.from('foto').getPublicUrl(path)
+        foto_url = data.publicUrl
+      }
+    }
+
+    const { error } = await supabase.from('dipendenti').update({
+      nome: editForm.nome,
+      ruolo_lavoro: editForm.ruolo_lavoro || null,
+      data_inizio: editForm.data_inizio || null,
+      stipendio_eur: Number(editForm.stipendio_eur) || 0,
+      stipendio_egp: Number(editForm.stipendio_egp) || 0,
+      foto_url,
+    }).eq('id', editandoDipendente)
+
+    setSalvandoEdit(false)
+    if (!error) {
+      setEditandoDipendente(null)
+      carica()
+    } else {
+      alert('Errore nella modifica: ' + error.message)
     }
   }
 
@@ -226,10 +272,56 @@ export default function Dipendenti() {
                     >A</button>
                   </div>
 
+                  {isMaster && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => apriModifica(d)}>
+                      Modifica
+                    </button>
+                  )}
+
                   <button className="btn btn-ghost btn-sm" onClick={() => setDipendenteAperto(aperto ? null : d.id)}>
                     {aperto ? 'Chiudi' : 'Dettagli'}
                   </button>
                 </div>
+
+                {isMaster && editandoDipendente === d.id && (
+                  <form onSubmit={salvaModificaDipendente} style={{ marginTop: 18, paddingTop: 18, borderTop: '1px dashed var(--linea)' }}>
+                    <h4 style={{ fontSize: 14, marginBottom: 12, fontFamily: 'var(--font-body)' }}>Modifica dati dipendente</h4>
+                    <div className="form-grid">
+                      <div className="field">
+                        <label>Nome</label>
+                        <input type="text" value={editForm.nome} onChange={(e) => setEditForm((f) => ({ ...f, nome: e.target.value }))} required />
+                      </div>
+                      <div className="field">
+                        <label>Ruolo / mansione</label>
+                        <input type="text" value={editForm.ruolo_lavoro} onChange={(e) => setEditForm((f) => ({ ...f, ruolo_lavoro: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Data inizio lavoro</label>
+                        <input type="date" value={editForm.data_inizio} onChange={(e) => setEditForm((f) => ({ ...f, data_inizio: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Stipendio mensile €</label>
+                        <input type="number" step="0.01" value={editForm.stipendio_eur} onChange={(e) => setEditForm((f) => ({ ...f, stipendio_eur: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Stipendio mensile LE</label>
+                        <input type="number" step="0.01" value={editForm.stipendio_egp} onChange={(e) => setEditForm((f) => ({ ...f, stipendio_egp: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Nuova foto (lascia vuoto per non cambiarla)</label>
+                        <input type="file" accept="image/*" onChange={(e) => setEditForm((f) => ({ ...f, foto: e.target.files[0] }))} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                      <button type="submit" className="btn btn-accent btn-sm" disabled={salvandoEdit}>
+                        {salvandoEdit ? 'Salvataggio…' : 'Salva modifiche'}
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditandoDipendente(null)}>
+                        Annulla
+                      </button>
+                    </div>
+                  </form>
+                )}
 
                 {aperto && (
                   <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--linea)' }}>
