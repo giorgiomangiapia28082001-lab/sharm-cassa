@@ -3,6 +3,7 @@ import { useAuth } from '../lib/AuthContext'
 
 const NAV_ITEMS = [
   { to: '/', icon: '◈', label: 'Riepilogo', roles: ['master', 'operatore', 'viewer'] },
+  { to: '/cassa', icon: '◫', label: 'Cassa', roles: ['master', 'operatore', 'viewer'] },
   { to: '/incassi', icon: '€', label: 'Incassi serata', roles: ['master', 'operatore', 'viewer'] },
   { to: '/uscite', icon: '↓', label: 'Uscite', roles: ['master', 'operatore', 'viewer'] },
   { to: '/spese-fisse', icon: '⏲', label: 'Spese fisse', roles: ['master', 'operatore', 'viewer'] },
