@@ -19,7 +19,7 @@ export default function Dipendenti() {
   const [salvandoNuovo, setSalvandoNuovo] = useState(false)
 
   // form acconto
-  const [accontoForm, setAccontoForm] = useState({ importo_eur: '', importo_egp: '', note: '' })
+  const [accontoForm, setAccontoForm] = useState({ importo_eur: '', importo_egp: '', note: '', erogato_da: 'direttore' })
   const [salvandoAcconto, setSalvandoAcconto] = useState(false)
 
   // form modifica foto/contatti — disponibile anche all'operatore
@@ -110,11 +110,12 @@ export default function Dipendenti() {
       importo_eur: Number(accontoForm.importo_eur) || 0,
       importo_egp: Number(accontoForm.importo_egp) || 0,
       note: accontoForm.note || null,
+      erogato_da: accontoForm.erogato_da || 'direttore',
       inserito_da: profile.id,
     })
     setSalvandoAcconto(false)
     if (!error) {
-      setAccontoForm({ importo_eur: '', importo_egp: '', note: '' })
+      setAccontoForm({ importo_eur: '', importo_egp: '', note: '', erogato_da: 'direttore' })
       carica()
     } else {
       alert('Errore: ' + error.message)
@@ -280,6 +281,14 @@ export default function Dipendenti() {
                           <div className="field">
                             <label>Note</label>
                             <input type="text" value={accontoForm.note} onChange={(e) => setAccontoForm((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
+                          </div>
+                          <div className="field">
+                            <label>Chi ha dato i soldi</label>
+                            <select value={accontoForm.erogato_da} onChange={(e) => setAccontoForm((f) => ({ ...f, erogato_da: e.target.value }))}>
+                              <option value="direttore">Direttore / cassa ristorante</option>
+                              <option value="gianluigi">Gianluigi</option>
+                              <option value="luca">Luca</option>
+                            </select>
                           </div>
                         </div>
                         <button className="btn btn-accent btn-sm" style={{ marginTop: 12 }} onClick={() => salvaAcconto(d.id)} disabled={salvandoAcconto}>
