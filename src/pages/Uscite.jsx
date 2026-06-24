@@ -4,6 +4,16 @@ import { useAuth } from '../lib/AuthContext'
 
 const oggi = () => new Date().toISOString().slice(0, 10)
 
+const VUOTO = {
+  data: oggi(),
+  descrizione: '',
+  categoria_id: '',
+  valuta: 'EGP',
+  importo: '',
+  metodo_pagamento: 'contanti',
+  foto: null,
+}
+
 export default function Uscite() {
   const { profile, isMaster, isViewer } = useAuth()
   const [righe, setRighe] = useState([])
@@ -12,16 +22,10 @@ export default function Uscite() {
   const [salvando, setSalvando] = useState(false)
   const [mostraForm, setMostraForm] = useState(!isViewer)
   const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [editandoId, setEditandoId] = useState(null)
+  const [editandoGeneratoDaAcconto, setEditandoGeneratoDaAcconto] = useState(false)
 
-  const [form, setForm] = useState({
-    data: oggi(),
-    descrizione: '',
-    categoria_id: '',
-    valuta: 'EGP',
-    importo: '',
-    metodo_pagamento: 'contanti',
-    foto: null,
-  })
+  const [form, setForm] = useState(VUOTO)
 
   async function carica() {
     setLoading(true)
@@ -36,9 +40,7 @@ export default function Uscite() {
     if (us) setRighe(us)
     if (cat) {
       setCategorie(cat)
-      if (!form.categoria_id && cat.length) {
-        setForm((f) => ({ ...f, categoria_id: cat[0].id }))
-      }
+      setForm((f) => (f.categoria_id ? f : { ...f, categoria_id: cat[0]?.id || '' }))
     }
     setLoading(false)
   }
@@ -49,6 +51,27 @@ export default function Uscite() {
 
   function update(campo, valore) {
     setForm((f) => ({ ...f, [campo]: valore }))
+  }
+
+  function annullaForm() {
+    setForm({ ...VUOTO, categoria_id: categorie[0]?.id || '' })
+    setEditandoId(null)
+    setEditandoGeneratoDaAcconto(false)
+  }
+
+  function apriModificaRiga(r) {
+    setForm({
+      data: r.data,
+      descrizione: r.descrizione,
+      categoria_id: r.categoria_id,
+      valuta: r.valuta,
+      importo: r.importo,
+      metodo_pagamento: r.metodo_pagamento,
+      foto: null,
+    })
+    setEditandoId(r.id)
+    setEditandoGeneratoDaAcconto(!!r.generato_da_acconto_id)
+    setMostraForm(true)
   }
 
   async function salva(e) {
@@ -66,23 +89,56 @@ export default function Uscite() {
       }
     }
 
-    const payload = {
-      data: form.data,
-      descrizione: form.descrizione,
-      categoria_id: form.categoria_id,
-      valuta: form.valuta,
-      importo: Number(form.importo) || 0,
-      metodo_pagamento: form.metodo_pagamento,
-      foto_url,
-      inserito_da: profile.id,
+    if (editandoId) {
+      const payload = {
+        data: form.data,
+        descrizione: form.descrizione,
+        categoria_id: form.categoria_id,
+        valuta: form.valuta,
+        importo: Number(form.importo) || 0,
+        metodo_pagamento: form.metodo_pagamento,
+      }
+      if (foto_url) payload.foto_url = foto_url
+      const { error } = await supabase.from('uscite').update(payload).eq('id', editandoId)
+      setSalvando(false)
+      if (!error) {
+        annullaForm()
+        carica()
+      } else {
+        alert('Errore nel salvataggio: ' + error.message)
+      }
+    } else {
+      const payload = {
+        data: form.data,
+        descrizione: form.descrizione,
+        categoria_id: form.categoria_id,
+        valuta: form.valuta,
+        importo: Number(form.importo) || 0,
+        metodo_pagamento: form.metodo_pagamento,
+        foto_url,
+        inserito_da: profile.id,
+      }
+      const { error } = await supabase.from('uscite').insert(payload)
+      setSalvando(false)
+      if (!error) {
+        setForm((f) => ({ ...f, descrizione: '', importo: '', foto: null }))
+        carica()
+      } else {
+        alert('Errore nel salvataggio: ' + error.message)
+      }
     }
-    const { error } = await supabase.from('uscite').insert(payload)
-    setSalvando(false)
+  }
+
+  async function eliminaRiga(r) {
+    const messaggio = r.generato_da_acconto_id
+      ? 'Questa uscita è collegata a un acconto dipendente: eliminandola, anche la parte corrispondente dell\'acconto verrà azzerata. Continuare?'
+      : 'Eliminare questa uscita? L\'operazione non è reversibile.'
+    if (!confirm(messaggio)) return
+    const { error } = await supabase.from('uscite').delete().eq('id', r.id)
     if (!error) {
-      setForm((f) => ({ ...f, descrizione: '', importo: '', foto: null }))
       carica()
     } else {
-      alert('Errore nel salvataggio: ' + error.message)
+      alert('Errore nell\'eliminazione: ' + error.message)
     }
   }
 
@@ -101,7 +157,7 @@ export default function Uscite() {
           <p className="page-subtitle">Registra le spese giorno per giorno, con categoria ed eventuale foto dello scontrino.</p>
         </div>
         {puoInserire && (
-          <button className="btn btn-primary" onClick={() => setMostraForm((v) => !v)}>
+          <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
             {mostraForm ? 'Nascondi modulo' : '+ Nuova uscita'}
           </button>
         )}
@@ -109,6 +165,12 @@ export default function Uscite() {
 
       {puoInserire && mostraForm && (
         <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
+          {editandoId && (
+            <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
+              Stai modificando un'uscita esistente.
+              {editandoGeneratoDaAcconto && ' Questa riga è collegata a un acconto dipendente: il residuo verrà aggiornato automaticamente.'}
+            </div>
+          )}
           <div className="form-grid">
             <div className="field">
               <label>Data</label>
@@ -150,14 +212,21 @@ export default function Uscite() {
               </select>
             </div>
             <div className="field">
-              <label>Foto scontrino (opzionale)</label>
+              <label>Foto scontrino {editandoId ? '(lascia vuoto per non cambiarla)' : '(opzionale)'}</label>
               <input type="file" accept="image/*" capture="environment" onChange={(e) => update('foto', e.target.files[0])} />
             </div>
           </div>
 
-          <button type="submit" className="btn btn-accent" style={{ marginTop: 18 }} disabled={salvando}>
-            {salvando ? 'Salvataggio…' : 'Salva uscita'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+            <button type="submit" className="btn btn-accent" disabled={salvando}>
+              {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva uscita'}
+            </button>
+            {editandoId && (
+              <button type="button" className="btn btn-ghost" onClick={annullaForm}>
+                Annulla modifica
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -190,13 +259,19 @@ export default function Uscite() {
                 <th>Metodo</th>
                 <th>Foto</th>
                 <th>Inserito da</th>
+                {isMaster && <th></th>}
               </tr>
             </thead>
             <tbody>
               {righeFiltrate.map((r) => (
                 <tr key={r.id}>
                   <td>{new Date(r.data).toLocaleDateString('it-IT')}</td>
-                  <td>{r.descrizione}</td>
+                  <td>
+                    {r.descrizione}
+                    {r.generato_da_acconto_id && (
+                      <span className="tag" style={{ marginLeft: 8, background: 'var(--sabbia-chiara)', fontSize: 11 }}>acconto</span>
+                    )}
+                  </td>
                   <td><span className="tag">{r.categorie_uscite?.nome}</span></td>
                   <td>{simboloValuta[r.valuta]} {Number(r.importo).toFixed(2)}</td>
                   <td style={{ textTransform: 'capitalize' }}>{r.metodo_pagamento}</td>
@@ -206,6 +281,12 @@ export default function Uscite() {
                     ) : '—'}
                   </td>
                   <td style={{ color: 'var(--inchiostro-soft)' }}>{r.profiles?.nome || '—'}</td>
+                  {isMaster && (
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => apriModificaRiga(r)}>Modifica</button>
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaRiga(r)}>Elimina</button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

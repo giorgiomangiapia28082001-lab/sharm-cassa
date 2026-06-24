@@ -25,6 +25,7 @@ export default function Incassi() {
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [mostraForm, setMostraForm] = useState(!isViewer)
+  const [editandoId, setEditandoId] = useState(null)
 
   async function carica() {
     setLoading(true)
@@ -45,6 +46,29 @@ export default function Incassi() {
     setForm((f) => ({ ...f, [campo]: valore }))
   }
 
+  function annullaForm() {
+    setForm({ ...VUOTO, data: oggi() })
+    setEditandoId(null)
+  }
+
+  function apriModificaRiga(r) {
+    setForm({
+      data: r.data,
+      eur_contanti: r.eur_contanti || '',
+      fondo_cassa: r.fondo_cassa || '',
+      bonifici: r.bonifici || '',
+      egp_pos: r.egp_pos || '',
+      usd_contanti: r.usd_contanti || '',
+      egp_contanti: r.egp_contanti || '',
+      delivery_eur: r.delivery_eur || '',
+      delivery_egp: r.delivery_egp || '',
+      numero_persone: r.numero_persone || '',
+      note: r.note || '',
+    })
+    setEditandoId(r.id)
+    setMostraForm(true)
+  }
+
   async function salva(e) {
     e.preventDefault()
     setSalvando(true)
@@ -60,15 +84,34 @@ export default function Incassi() {
       delivery_egp: Number(form.delivery_egp) || 0,
       numero_persone: Number(form.numero_persone) || 0,
       note: form.note || null,
-      inserito_da: profile.id,
     }
-    const { error } = await supabase.from('incassi').insert(payload)
+
+    let error
+    if (editandoId) {
+      // Modifica: solo il Master può farlo
+      const res = await supabase.from('incassi').update(payload).eq('id', editandoId)
+      error = res.error
+    } else {
+      const res = await supabase.from('incassi').insert({ ...payload, inserito_da: profile.id })
+      error = res.error
+    }
+
     setSalvando(false)
     if (!error) {
-      setForm({ ...VUOTO, data: oggi() })
+      annullaForm()
       carica()
     } else {
       alert('Errore nel salvataggio: ' + error.message)
+    }
+  }
+
+  async function eliminaRiga(id) {
+    if (!confirm('Eliminare questo incasso? L\'operazione non è reversibile.')) return
+    const { error } = await supabase.from('incassi').delete().eq('id', id)
+    if (!error) {
+      carica()
+    } else {
+      alert('Errore nell\'eliminazione: ' + error.message)
     }
   }
 
@@ -82,7 +125,7 @@ export default function Incassi() {
           <p className="page-subtitle">Registra l'incasso di sala e il delivery di ogni serata, diviso per valuta.</p>
         </div>
         {puoInserire && (
-          <button className="btn btn-primary" onClick={() => setMostraForm((v) => !v)}>
+          <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
             {mostraForm ? 'Nascondi modulo' : '+ Nuovo incasso'}
           </button>
         )}
@@ -90,6 +133,11 @@ export default function Incassi() {
 
       {puoInserire && mostraForm && (
         <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
+          {editandoId && (
+            <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
+              Stai modificando un incasso esistente (solo Master).
+            </div>
+          )}
           <div className="form-grid">
             <div className="field">
               <label>Data</label>
@@ -162,9 +210,16 @@ export default function Incassi() {
             <textarea rows="2" value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="Eventuali annotazioni sulla serata…" />
           </div>
 
-          <button type="submit" className="btn btn-accent" style={{ marginTop: 18 }} disabled={salvando}>
-            {salvando ? 'Salvataggio…' : 'Salva incasso'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+            <button type="submit" className="btn btn-accent" disabled={salvando}>
+              {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva incasso'}
+            </button>
+            {editandoId && (
+              <button type="button" className="btn btn-ghost" onClick={annullaForm}>
+                Annulla modifica
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -193,6 +248,7 @@ export default function Incassi() {
                 <th>Delivery LE</th>
                 <th>Persone</th>
                 <th>Inserito da</th>
+                {isMaster && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -209,6 +265,12 @@ export default function Incassi() {
                   <td>{Number(r.delivery_egp || 0).toFixed(0)} LE</td>
                   <td>{r.numero_persone}</td>
                   <td style={{ color: 'var(--inchiostro-soft)' }}>{r.profiles?.nome || '—'}</td>
+                  {isMaster && (
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => apriModificaRiga(r)}>Modifica</button>
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaRiga(r.id)}>Elimina</button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

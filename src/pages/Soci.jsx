@@ -11,6 +11,7 @@ export default function Soci() {
   const [loading, setLoading] = useState(true)
   const [mostraForm, setMostraForm] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [editandoId, setEditandoId] = useState(null)
 
   const [form, setForm] = useState({
     socio_id: '',
@@ -34,22 +35,59 @@ export default function Soci() {
 
   useEffect(() => { carica() }, [])
 
+  function annullaForm() {
+    setForm({ socio_id: soci[0]?.id || '', data: oggi(), descrizione: '', importo_eur: '', importo_egp: '' })
+    setEditandoId(null)
+  }
+
+  function apriModificaRiga(s) {
+    setForm({
+      socio_id: s.socio_id,
+      data: s.data,
+      descrizione: s.descrizione || '',
+      importo_eur: s.importo_eur || '',
+      importo_egp: s.importo_egp || '',
+    })
+    setEditandoId(s.id)
+    setMostraForm(true)
+  }
+
   async function salva(e) {
     e.preventDefault()
     setSalvando(true)
-    const { error } = await supabase.from('spese_socio').insert({
+    const payload = {
       socio_id: form.socio_id,
       data: form.data,
       descrizione: form.descrizione || null,
       importo_eur: Number(form.importo_eur) || 0,
       importo_egp: Number(form.importo_egp) || 0,
-    })
+    }
+
+    let error
+    if (editandoId) {
+      const res = await supabase.from('spese_socio').update(payload).eq('id', editandoId)
+      error = res.error
+    } else {
+      const res = await supabase.from('spese_socio').insert(payload)
+      error = res.error
+    }
+
     setSalvando(false)
     if (!error) {
-      setForm((f) => ({ ...f, descrizione: '', importo_eur: '', importo_egp: '' }))
+      annullaForm()
       carica()
     } else {
       alert('Errore: ' + error.message)
+    }
+  }
+
+  async function eliminaRiga(id) {
+    if (!confirm('Eliminare questa spesa? L\'operazione non è reversibile.')) return
+    const { error } = await supabase.from('spese_socio').delete().eq('id', id)
+    if (!error) {
+      carica()
+    } else {
+      alert('Errore nell\'eliminazione: ' + error.message)
     }
   }
 
@@ -70,7 +108,7 @@ export default function Soci() {
           <p className="page-subtitle">Spese personali sostenute dai proprietari, scalate a parte dall'utile da dividere a fine mese.</p>
         </div>
         {isMaster && (
-          <button className="btn btn-primary" onClick={() => setMostraForm((v) => !v)}>
+          <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
             {mostraForm ? 'Nascondi modulo' : '+ Nuova spesa'}
           </button>
         )}
@@ -88,6 +126,11 @@ export default function Soci() {
 
       {isMaster && mostraForm && (
         <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
+          {editandoId && (
+            <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
+              Stai modificando una spesa esistente.
+            </div>
+          )}
           <div className="form-grid">
             <div className="field">
               <label>Socio</label>
@@ -112,9 +155,16 @@ export default function Soci() {
               <input type="number" step="0.01" value={form.importo_egp} onChange={(e) => setForm((f) => ({ ...f, importo_egp: e.target.value }))} placeholder="0.00" />
             </div>
           </div>
-          <button type="submit" className="btn btn-accent" style={{ marginTop: 18 }} disabled={salvando}>
-            {salvando ? 'Salvataggio…' : 'Salva spesa'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+            <button type="submit" className="btn btn-accent" disabled={salvando}>
+              {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva spesa'}
+            </button>
+            {editandoId && (
+              <button type="button" className="btn btn-ghost" onClick={annullaForm}>
+                Annulla modifica
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -137,6 +187,7 @@ export default function Soci() {
                 <th>Descrizione</th>
                 <th>Importo €</th>
                 <th>Importo LE</th>
+                {isMaster && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -147,6 +198,12 @@ export default function Soci() {
                   <td>{s.descrizione || '—'}</td>
                   <td>€ {Number(s.importo_eur).toFixed(2)}</td>
                   <td>{Number(s.importo_egp).toFixed(0)} LE</td>
+                  {isMaster && (
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => apriModificaRiga(s)}>Modifica</button>
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaRiga(s.id)}>Elimina</button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
