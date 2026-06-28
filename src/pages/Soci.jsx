@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
-const oggi = () => new Date().toISOString().slice(0, 10)
+import { oggiLocale } from '../lib/date'
+
+const oggi = oggiLocale
 
 export default function Soci() {
   const { isMaster } = useAuth()

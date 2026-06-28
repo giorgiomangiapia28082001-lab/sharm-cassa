@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
-const oggi = () => new Date().toISOString().slice(0, 10)
+import { oggiLocale, primoGiornoMeseLocale } from '../lib/date'
+
+const oggi = oggiLocale
 
 export default function Dipendenti() {
   const { profile, isMaster, isViewer } = useAuth()
@@ -50,7 +52,7 @@ export default function Dipendenti() {
     setAccontiTotali(mapAcc)
 
     // Stipendio calcolato per il mese corrente (vista stipendi_calcolati)
-    const primoGiornoMeseCorrente = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
+    const primoGiornoMeseCorrente = primoGiornoMeseLocale()
     const { data: stip } = await supabase
       .from('stipendi_calcolati')
       .select('*')

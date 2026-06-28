@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { oggiLocale, primoGiornoMeseLocale } from '../lib/date'
 
-const oggi = () => new Date().toISOString().slice(0, 10)
-const inizioMese = () => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10) }
-const primoGiornoMese = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10) }
+const oggi = oggiLocale
+const inizioMese = primoGiornoMeseLocale
+const primoGiornoMese = primoGiornoMeseLocale
 
 export default function Riepilogo() {
   const [loading, setLoading] = useState(true)

@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
-
-function primoGiornoMese(d = new Date()) {
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
-}
+import { primoGiornoMeseLocale as primoGiornoMese } from '../lib/date'
 
 const TIPO_LABEL = {
   fitto_locale: 'Fitto locale',
