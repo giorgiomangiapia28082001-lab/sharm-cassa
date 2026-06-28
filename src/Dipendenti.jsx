@@ -9,6 +9,7 @@ export default function Dipendenti() {
   const [dipendenti, setDipendenti] = useState([])
   const [presenzeOggi, setPresenzeOggi] = useState({})
   const [accontiTotali, setAccontiTotali] = useState({})
+  const [stipendiCalcolati, setStipendiCalcolati] = useState({})
   const [loading, setLoading] = useState(true)
   const [dataSelezionata, setDataSelezionata] = useState(oggi())
   const [dipendenteAperto, setDipendenteAperto] = useState(null)
@@ -19,13 +20,13 @@ export default function Dipendenti() {
   const [salvandoNuovo, setSalvandoNuovo] = useState(false)
 
   // form acconto
-  const [accontoForm, setAccontoForm] = useState({ importo_eur: '', importo_egp: '', note: '' })
+  const [accontoForm, setAccontoForm] = useState({ importo_eur: '', importo_egp: '', note: '', erogato_da: 'direttore' })
   const [salvandoAcconto, setSalvandoAcconto] = useState(false)
 
-  // form modifica foto/contatti — disponibile anche all'operatore
-  const [contattoForm, setContattoForm] = useState({ telefono: '', note_operatore: '', foto: null })
-  const [editandoContatti, setEditandoContatti] = useState(null)
-  const [salvandoContatti, setSalvandoContatti] = useState(false)
+  // form modifica dipendente — solo Master, tutti i campi
+  const [editForm, setEditForm] = useState({ nome: '', ruolo_lavoro: '', data_inizio: '', stipendio_eur: '', stipendio_egp: '', foto: null, foto_url_attuale: null })
+  const [editandoDipendente, setEditandoDipendente] = useState(null)
+  const [salvandoEdit, setSalvandoEdit] = useState(false)
 
   const puoSegnare = isMaster || profile?.ruolo === 'operatore'
 
@@ -47,6 +48,16 @@ export default function Dipendenti() {
       mapAcc[a.dipendente_id].egp += Number(a.importo_egp) || 0
     })
     setAccontiTotali(mapAcc)
+
+    // Stipendio calcolato per il mese corrente (vista stipendi_calcolati)
+    const primoGiornoMeseCorrente = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
+    const { data: stip } = await supabase
+      .from('stipendi_calcolati')
+      .select('*')
+      .eq('mese', primoGiornoMeseCorrente)
+    const mapStip = {}
+    ;(stip || []).forEach((s) => { mapStip[s.dipendente_id] = s })
+    setStipendiCalcolati(mapStip)
 
     setLoading(false)
   }
@@ -110,14 +121,61 @@ export default function Dipendenti() {
       importo_eur: Number(accontoForm.importo_eur) || 0,
       importo_egp: Number(accontoForm.importo_egp) || 0,
       note: accontoForm.note || null,
+      erogato_da: accontoForm.erogato_da || 'direttore',
       inserito_da: profile.id,
     })
     setSalvandoAcconto(false)
     if (!error) {
-      setAccontoForm({ importo_eur: '', importo_egp: '', note: '' })
+      setAccontoForm({ importo_eur: '', importo_egp: '', note: '', erogato_da: 'direttore' })
       carica()
     } else {
       alert('Errore: ' + error.message)
+    }
+  }
+
+  function apriModifica(d) {
+    setEditForm({
+      nome: d.nome || '',
+      ruolo_lavoro: d.ruolo_lavoro || '',
+      data_inizio: d.data_inizio || '',
+      stipendio_eur: d.stipendio_eur || '',
+      stipendio_egp: d.stipendio_egp || '',
+      foto: null,
+      foto_url_attuale: d.foto_url || null,
+    })
+    setEditandoDipendente(d.id)
+  }
+
+  async function salvaModificaDipendente(e) {
+    e.preventDefault()
+    setSalvandoEdit(true)
+
+    let foto_url = editForm.foto_url_attuale
+    if (editForm.foto) {
+      const ext = editForm.foto.name.split('.').pop()
+      const path = `dipendenti/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: uploadError } = await supabase.storage.from('foto').upload(path, editForm.foto)
+      if (!uploadError) {
+        const { data } = supabase.storage.from('foto').getPublicUrl(path)
+        foto_url = data.publicUrl
+      }
+    }
+
+    const { error } = await supabase.from('dipendenti').update({
+      nome: editForm.nome,
+      ruolo_lavoro: editForm.ruolo_lavoro || null,
+      data_inizio: editForm.data_inizio || null,
+      stipendio_eur: Number(editForm.stipendio_eur) || 0,
+      stipendio_egp: Number(editForm.stipendio_egp) || 0,
+      foto_url,
+    }).eq('id', editandoDipendente)
+
+    setSalvandoEdit(false)
+    if (!error) {
+      setEditandoDipendente(null)
+      carica()
+    } else {
+      alert('Errore nella modifica: ' + error.message)
     }
   }
 
@@ -184,8 +242,11 @@ export default function Dipendenti() {
           {dipendenti.map((d) => {
             const stato = presenzeOggi[d.id]?.stato
             const acconti = accontiTotali[d.id] || { eur: 0, egp: 0 }
-            const residuoEur = Number(d.stipendio_eur) - acconti.eur
-            const residuoEgp = Number(d.stipendio_egp) - acconti.egp
+            const calcoloMese = stipendiCalcolati[d.id]
+            const stipendioDovutoEur = calcoloMese ? Number(calcoloMese.stipendio_dovuto_eur) : Number(d.stipendio_eur)
+            const stipendioDovutoEgp = calcoloMese ? Number(calcoloMese.stipendio_dovuto_egp) : Number(d.stipendio_egp)
+            const residuoEur = stipendioDovutoEur - acconti.eur
+            const residuoEgp = stipendioDovutoEgp - acconti.egp
             const aperto = dipendenteAperto === d.id
 
             return (
@@ -225,21 +286,88 @@ export default function Dipendenti() {
                     >A</button>
                   </div>
 
+                  {isMaster && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => apriModifica(d)}>
+                      Modifica
+                    </button>
+                  )}
+
                   <button className="btn btn-ghost btn-sm" onClick={() => setDipendenteAperto(aperto ? null : d.id)}>
                     {aperto ? 'Chiudi' : 'Dettagli'}
                   </button>
                 </div>
 
+                {isMaster && editandoDipendente === d.id && (
+                  <form onSubmit={salvaModificaDipendente} style={{ marginTop: 18, paddingTop: 18, borderTop: '1px dashed var(--linea)' }}>
+                    <h4 style={{ fontSize: 14, marginBottom: 12, fontFamily: 'var(--font-body)' }}>Modifica dati dipendente</h4>
+                    <div className="form-grid">
+                      <div className="field">
+                        <label>Nome</label>
+                        <input type="text" value={editForm.nome} onChange={(e) => setEditForm((f) => ({ ...f, nome: e.target.value }))} required />
+                      </div>
+                      <div className="field">
+                        <label>Ruolo / mansione</label>
+                        <input type="text" value={editForm.ruolo_lavoro} onChange={(e) => setEditForm((f) => ({ ...f, ruolo_lavoro: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Data inizio lavoro</label>
+                        <input type="date" value={editForm.data_inizio} onChange={(e) => setEditForm((f) => ({ ...f, data_inizio: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Stipendio mensile €</label>
+                        <input type="number" step="0.01" value={editForm.stipendio_eur} onChange={(e) => setEditForm((f) => ({ ...f, stipendio_eur: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Stipendio mensile LE</label>
+                        <input type="number" step="0.01" value={editForm.stipendio_egp} onChange={(e) => setEditForm((f) => ({ ...f, stipendio_egp: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Nuova foto (lascia vuoto per non cambiarla)</label>
+                        <input type="file" accept="image/*" onChange={(e) => setEditForm((f) => ({ ...f, foto: e.target.files[0] }))} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                      <button type="submit" className="btn btn-accent btn-sm" disabled={salvandoEdit}>
+                        {salvandoEdit ? 'Salvataggio…' : 'Salva modifiche'}
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditandoDipendente(null)}>
+                        Annulla
+                      </button>
+                    </div>
+                  </form>
+                )}
+
                 {aperto && (
                   <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--linea)' }}>
+                    {calcoloMese && (
+                      <div className="card" style={{ marginBottom: 16, background: 'var(--avorio)', border: '1px dashed var(--linea)' }}>
+                        <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', lineHeight: 1.7 }}>
+                          <strong style={{ color: 'var(--notte)' }}>Questo mese:</strong>{' '}
+                          {calcoloMese.giorni_presenti} giorni presenti su {calcoloMese.riferimento} di riferimento
+                          {calcoloMese.giorni_parziali > 0 && (
+                            <span className="tag" style={{ marginLeft: 8, background: 'rgba(232,199,146,0.3)', color: '#8a6a2b' }}>
+                              ⚠ {calcoloMese.giorni_parziali} giorni parziali da valutare a parte
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <div className="stats-grid" style={{ marginBottom: 18 }}>
                       <div className="stat-card">
-                        <div className="stat-label">Stipendio €</div>
+                        <div className="stat-label">Stipendio base €</div>
                         <div className="stat-value">€ {Number(d.stipendio_eur).toFixed(2)}</div>
                       </div>
                       <div className="stat-card">
-                        <div className="stat-label">Stipendio LE</div>
+                        <div className="stat-label">Stipendio base LE</div>
                         <div className="stat-value">{Number(d.stipendio_egp).toFixed(0)} LE</div>
+                      </div>
+                      <div className="stat-card">
+                        <div className="stat-label">Dovuto questo mese €</div>
+                        <div className="stat-value">€ {stipendioDovutoEur.toFixed(2)}</div>
+                      </div>
+                      <div className="stat-card">
+                        <div className="stat-label">Dovuto questo mese LE</div>
+                        <div className="stat-value">{stipendioDovutoEgp.toFixed(0)} LE</div>
                       </div>
                       <div className="stat-card">
                         <div className="stat-label">Acconti versati €</div>
@@ -280,6 +408,14 @@ export default function Dipendenti() {
                           <div className="field">
                             <label>Note</label>
                             <input type="text" value={accontoForm.note} onChange={(e) => setAccontoForm((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
+                          </div>
+                          <div className="field">
+                            <label>Chi ha dato i soldi</label>
+                            <select value={accontoForm.erogato_da} onChange={(e) => setAccontoForm((f) => ({ ...f, erogato_da: e.target.value }))}>
+                              <option value="direttore">Direttore / cassa ristorante</option>
+                              <option value="gianluigi">Gianluigi</option>
+                              <option value="luca">Luca</option>
+                            </select>
                           </div>
                         </div>
                         <button className="btn btn-accent btn-sm" style={{ marginTop: 12 }} onClick={() => salvaAcconto(d.id)} disabled={salvandoAcconto}>
