@@ -102,6 +102,21 @@ export default function SpeseFisse() {
     }
   }
 
+  async function annullaPagamento(voce, pagamento) {
+    const conferma = confirm(
+      `Stai per annullare il pagamento di "${voce.nome}" per questo mese.\n` +
+      `Verrà rimossa anche l'uscita corrispondente dalla contabilità e il saldo della Cassa si aggiornerà di conseguenza.\n\n` +
+      `Confermi l'annullamento?`
+    )
+    if (!conferma) return
+    const { error } = await supabase.from('pagamenti_spese_fisse').delete().eq('id', pagamento.id)
+    if (!error) {
+      carica()
+    } else {
+      alert('Errore nell\'annullamento: ' + error.message)
+    }
+  }
+
   const pagamentiMap = {}
   pagamenti.forEach((p) => { pagamentiMap[p.spesa_fissa_id] = p })
 
@@ -202,9 +217,16 @@ export default function SpeseFisse() {
                       </div>
 
                       {pagato ? (
-                        <span className="tag" style={{ background: 'rgba(47,158,104,0.15)', color: 'var(--smeraldo)' }}>
-                          Pagato il {new Date(pagamentiMap[v.id].data_pagamento).toLocaleDateString('it-IT')}
-                        </span>
+                        <>
+                          <span className="tag" style={{ background: 'rgba(47,158,104,0.15)', color: 'var(--smeraldo)' }}>
+                            Pagato il {new Date(pagamentiMap[v.id].data_pagamento).toLocaleDateString('it-IT')}
+                          </span>
+                          {isMaster && (
+                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => annullaPagamento(v, pagamentiMap[v.id])}>
+                              Annulla pagamento
+                            </button>
+                          )}
+                        </>
                       ) : (
                         <>
                           <span className="tag" style={{ background: inRitardo ? 'rgba(217,104,79,0.15)' : 'var(--sabbia-chiara)', color: inRitardo ? 'var(--corallo)' : 'var(--notte)' }}>
