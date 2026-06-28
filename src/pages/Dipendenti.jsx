@@ -9,6 +9,7 @@ export default function Dipendenti() {
   const [dipendenti, setDipendenti] = useState([])
   const [presenzeOggi, setPresenzeOggi] = useState({})
   const [accontiTotali, setAccontiTotali] = useState({})
+  const [stipendiCalcolati, setStipendiCalcolati] = useState({})
   const [loading, setLoading] = useState(true)
   const [dataSelezionata, setDataSelezionata] = useState(oggi())
   const [dipendenteAperto, setDipendenteAperto] = useState(null)
@@ -47,6 +48,16 @@ export default function Dipendenti() {
       mapAcc[a.dipendente_id].egp += Number(a.importo_egp) || 0
     })
     setAccontiTotali(mapAcc)
+
+    // Stipendio calcolato per il mese corrente (vista stipendi_calcolati)
+    const primoGiornoMeseCorrente = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
+    const { data: stip } = await supabase
+      .from('stipendi_calcolati')
+      .select('*')
+      .eq('mese', primoGiornoMeseCorrente)
+    const mapStip = {}
+    ;(stip || []).forEach((s) => { mapStip[s.dipendente_id] = s })
+    setStipendiCalcolati(mapStip)
 
     setLoading(false)
   }
@@ -231,8 +242,11 @@ export default function Dipendenti() {
           {dipendenti.map((d) => {
             const stato = presenzeOggi[d.id]?.stato
             const acconti = accontiTotali[d.id] || { eur: 0, egp: 0 }
-            const residuoEur = Number(d.stipendio_eur) - acconti.eur
-            const residuoEgp = Number(d.stipendio_egp) - acconti.egp
+            const calcoloMese = stipendiCalcolati[d.id]
+            const stipendioDovutoEur = calcoloMese ? Number(calcoloMese.stipendio_dovuto_eur) : Number(d.stipendio_eur)
+            const stipendioDovutoEgp = calcoloMese ? Number(calcoloMese.stipendio_dovuto_egp) : Number(d.stipendio_egp)
+            const residuoEur = stipendioDovutoEur - acconti.eur
+            const residuoEgp = stipendioDovutoEgp - acconti.egp
             const aperto = dipendenteAperto === d.id
 
             return (
@@ -325,14 +339,35 @@ export default function Dipendenti() {
 
                 {aperto && (
                   <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--linea)' }}>
+                    {calcoloMese && (
+                      <div className="card" style={{ marginBottom: 16, background: 'var(--avorio)', border: '1px dashed var(--linea)' }}>
+                        <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', lineHeight: 1.7 }}>
+                          <strong style={{ color: 'var(--notte)' }}>Questo mese:</strong>{' '}
+                          {calcoloMese.giorni_presenti} giorni presenti su {calcoloMese.riferimento} di riferimento
+                          {calcoloMese.giorni_parziali > 0 && (
+                            <span className="tag" style={{ marginLeft: 8, background: 'rgba(232,199,146,0.3)', color: '#8a6a2b' }}>
+                              ⚠ {calcoloMese.giorni_parziali} giorni parziali da valutare a parte
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <div className="stats-grid" style={{ marginBottom: 18 }}>
                       <div className="stat-card">
-                        <div className="stat-label">Stipendio €</div>
+                        <div className="stat-label">Stipendio base €</div>
                         <div className="stat-value">€ {Number(d.stipendio_eur).toFixed(2)}</div>
                       </div>
                       <div className="stat-card">
-                        <div className="stat-label">Stipendio LE</div>
+                        <div className="stat-label">Stipendio base LE</div>
                         <div className="stat-value">{Number(d.stipendio_egp).toFixed(0)} LE</div>
+                      </div>
+                      <div className="stat-card">
+                        <div className="stat-label">Dovuto questo mese €</div>
+                        <div className="stat-value">€ {stipendioDovutoEur.toFixed(2)}</div>
+                      </div>
+                      <div className="stat-card">
+                        <div className="stat-label">Dovuto questo mese LE</div>
+                        <div className="stat-value">{stipendioDovutoEgp.toFixed(0)} LE</div>
                       </div>
                       <div className="stat-card">
                         <div className="stat-label">Acconti versati €</div>
