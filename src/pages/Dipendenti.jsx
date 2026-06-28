@@ -15,6 +15,7 @@ export default function Dipendenti() {
   const [loading, setLoading] = useState(true)
   const [dataSelezionata, setDataSelezionata] = useState(oggi())
   const [dipendenteAperto, setDipendenteAperto] = useState(null)
+  const [dettaglioGiorniAperto, setDettaglioGiorniAperto] = useState(null)
 
   // form nuovo dipendente (solo master)
   const [mostraNuovo, setMostraNuovo] = useState(false)
@@ -66,10 +67,17 @@ export default function Dipendenti() {
 
   useEffect(() => { carica() }, [dataSelezionata])
 
-  async function segnaPresenza(dipendenteId, stato) {
+  async function segnaPresenza(dipendenteId, stato, nomeDipendente) {
     if (!puoSegnare) return
     const esistente = presenzeOggi[dipendenteId]
+
     if (esistente) {
+      if (esistente.stato === stato) return // già impostato così, nessuna modifica
+      const labelStato = { presente: 'Presente', assente: 'Assente', parziale: 'Parziale' }
+      const conferma = confirm(
+        `${nomeDipendente}: stai cambiando da "${labelStato[esistente.stato]}" a "${labelStato[stato]}". Confermi?`
+      )
+      if (!conferma) return
       await supabase.from('presenze').update({ stato }).eq('id', esistente.id)
     } else {
       await supabase.from('presenze').insert({
@@ -270,19 +278,19 @@ export default function Dipendenti() {
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button
                       className={`attendance-pill ${stato === 'presente' ? 'presente' : 'vuoto'}`}
-                      onClick={() => segnaPresenza(d.id, 'presente')}
+                      onClick={() => segnaPresenza(d.id, 'presente', d.nome)}
                       disabled={!puoSegnare}
                       title="Presente"
                     >P</button>
                     <button
                       className={`attendance-pill ${stato === 'parziale' ? 'parziale' : 'vuoto'}`}
-                      onClick={() => segnaPresenza(d.id, 'parziale')}
+                      onClick={() => segnaPresenza(d.id, 'parziale', d.nome)}
                       disabled={!puoSegnare}
                       title="Parziale"
                     >½</button>
                     <button
                       className={`attendance-pill ${stato === 'assente' ? 'assente' : 'vuoto'}`}
-                      onClick={() => segnaPresenza(d.id, 'assente')}
+                      onClick={() => segnaPresenza(d.id, 'assente', d.nome)}
                       disabled={!puoSegnare}
                       title="Assente"
                     >A</button>
@@ -343,15 +351,52 @@ export default function Dipendenti() {
                   <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--linea)' }}>
                     {calcoloMese && (
                       <div className="card" style={{ marginBottom: 16, background: 'var(--avorio)', border: '1px dashed var(--linea)' }}>
-                        <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', lineHeight: 1.7 }}>
-                          <strong style={{ color: 'var(--notte)' }}>Questo mese:</strong>{' '}
-                          {calcoloMese.giorni_presenti} giorni presenti su {calcoloMese.riferimento} di riferimento
-                          {calcoloMese.giorni_parziali > 0 && (
-                            <span className="tag" style={{ marginLeft: 8, background: 'rgba(232,199,146,0.3)', color: '#8a6a2b' }}>
-                              ⚠ {calcoloMese.giorni_parziali} giorni parziali da valutare a parte
-                            </span>
-                          )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                          <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', lineHeight: 1.7 }}>
+                            <strong style={{ color: 'var(--notte)' }}>Questo mese:</strong>{' '}
+                            {calcoloMese.giorni_presenti} giorni presenti su {calcoloMese.riferimento} di riferimento
+                            {calcoloMese.giorni_parziali > 0 && (
+                              <span className="tag" style={{ marginLeft: 8, background: 'rgba(232,199,146,0.3)', color: '#8a6a2b' }}>
+                                ⚠ {calcoloMese.giorni_parziali} giorni parziali da valutare a parte
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => setDettaglioGiorniAperto(dettaglioGiorniAperto === d.id ? null : d.id)}
+                          >
+                            {dettaglioGiorniAperto === d.id ? 'Nascondi giorni ▾' : 'Vedi giorni ▸'}
+                          </button>
                         </div>
+
+                        {dettaglioGiorniAperto === d.id && (
+                          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--linea)' }}>
+                            {calcoloMese.elenco_giorni_assenti?.length > 0 && (
+                              <div style={{ fontSize: 13, color: 'var(--corallo)', marginBottom: 6 }}>
+                                <strong>Giorni assenti:</strong> {calcoloMese.elenco_giorni_assenti.join(', ')}
+                              </div>
+                            )}
+
+                            {calcoloMese.elenco_giorni_non_segnati?.length > 0 && (
+                              <div style={{ fontSize: 13, color: '#8a6a2b', marginBottom: 6 }}>
+                                <strong>⚠ Nessun dato inserito (contati come assenti):</strong> {calcoloMese.elenco_giorni_non_segnati.join(', ')}
+                              </div>
+                            )}
+
+                            {calcoloMese.elenco_giorni_parziali?.length > 0 && (
+                              <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>
+                                <strong>Giorni parziali:</strong> {calcoloMese.elenco_giorni_parziali.join(', ')}
+                              </div>
+                            )}
+
+                            {!calcoloMese.elenco_giorni_assenti?.length && !calcoloMese.elenco_giorni_parziali?.length && (
+                              <div style={{ fontSize: 13, color: 'var(--smeraldo)' }}>
+                                Nessuna assenza questo mese.
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="stats-grid" style={{ marginBottom: 18 }}>
