@@ -73,9 +73,13 @@ export default function Cassa() {
     }
   }
 
-  async function eliminaMovimento(id) {
+  async function eliminaMovimento(m) {
+    if (m.tipo === 'incasso_b2b') {
+      alert('Questo movimento proviene da un pagamento Sadiki. Per eliminarlo, vai nella sezione Sadiki ed elimina il pagamento da lì.')
+      return
+    }
     if (!confirm('Eliminare questo movimento? Il saldo verrà ricalcolato.')) return
-    const { error } = await supabase.from('movimenti_cassa').delete().eq('id', id)
+    const { error } = await supabase.from('movimenti_cassa').delete().eq('id', m.id)
     if (!error) carica()
   }
 
@@ -205,18 +209,20 @@ export default function Cassa() {
                 <tr key={m.id}>
                   <td>{new Date(m.data).toLocaleDateString('it-IT')}</td>
                   <td>
-                    <span className="tag">{m.tipo === 'cambio_valuta' ? 'Cambio valuta' : 'Prelievo POS'}</span>
+                    <span className="tag">{m.tipo === 'cambio_valuta' ? 'Cambio valuta' : m.tipo === 'incasso_b2b' ? 'Incasso Sadiki' : 'Prelievo POS'}</span>
                   </td>
                   <td>
                     {m.tipo === 'cambio_valuta'
                       ? `${VALUTE[m.valuta_da]} ${Number(m.importo_da).toFixed(2)} → ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
+                      : m.tipo === 'incasso_b2b'
+                      ? `+ ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
                       : `${Number(m.importo_pos).toFixed(2)} LE da POS a contanti`}
                   </td>
                   <td style={{ color: 'var(--inchiostro-soft)' }}>{m.note || '—'}</td>
                   <td style={{ color: 'var(--inchiostro-soft)' }}>{m.profiles?.nome || '—'}</td>
                   {isMaster && (
                     <td>
-                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaMovimento(m.id)}>Elimina</button>
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaMovimento(m)}>Elimina</button>
                     </td>
                   )}
                 </tr>
