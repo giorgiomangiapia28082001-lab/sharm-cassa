@@ -8,6 +8,7 @@ import Incassi from './pages/Incassi'
 import SpeseFisse from './pages/SpeseFisse'
 import Uscite from './pages/Uscite'
 import Dipendenti from './pages/Dipendenti'
+import Sadiki from './pages/Sadiki'
 import Soci from './pages/Soci'
 import Impostazioni from './pages/Impostazioni'
 
@@ -48,6 +49,7 @@ function RotteProtette() {
         <Route path="spese-fisse" element={<SpeseFisse />} />
         <Route path="uscite" element={<Uscite />} />
         <Route path="dipendenti" element={<Dipendenti />} />
+        <Route path="sadiki" element={<Sadiki />} />
         <Route
           path="soci"
           element={profile.ruolo === 'master' || profile.ruolo === 'viewer' ? <Soci /> : <Navigate to="/" />}
