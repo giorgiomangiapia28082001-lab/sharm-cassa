@@ -11,6 +11,8 @@ export default function Dipendenti() {
   const [dipendenti, setDipendenti] = useState([])
   const [presenzeOggi, setPresenzeOggi] = useState({})
   const [accontiTotali, setAccontiTotali] = useState({})
+  const [accontiDettaglio, setAccontiDettaglio] = useState({}) // id → [{data, importo_eur, importo_egp, erogato_da, note}]
+  const [mostraExDipendenti, setMostraExDipendenti] = useState(false)
   const [stipendiCalcolati, setStipendiCalcolati] = useState({})
   const [loading, setLoading] = useState(true)
   const [dataSelezionata, setDataSelezionata] = useState(oggi())
@@ -35,7 +37,7 @@ export default function Dipendenti() {
 
   async function carica() {
     setLoading(true)
-    const { data: dip } = await supabase.from('dipendenti').select('*').eq('attivo', true).order('nome')
+    const { data: dip } = await supabase.from('dipendenti').select('*').order('nome')
     setDipendenti(dip || [])
 
     const { data: pres } = await supabase.from('presenze').select('*').eq('data', dataSelezionata)
@@ -43,14 +45,18 @@ export default function Dipendenti() {
     ;(pres || []).forEach((p) => { mapPres[p.dipendente_id] = p })
     setPresenzeOggi(mapPres)
 
-    const { data: acc } = await supabase.from('acconti').select('*')
+    const { data: acc } = await supabase.from('acconti').select('*').order('data', { ascending: false })
     const mapAcc = {}
+    const mapAccDet = {}
     ;(acc || []).forEach((a) => {
       if (!mapAcc[a.dipendente_id]) mapAcc[a.dipendente_id] = { eur: 0, egp: 0 }
       mapAcc[a.dipendente_id].eur += Number(a.importo_eur) || 0
       mapAcc[a.dipendente_id].egp += Number(a.importo_egp) || 0
+      if (!mapAccDet[a.dipendente_id]) mapAccDet[a.dipendente_id] = []
+      mapAccDet[a.dipendente_id].push(a)
     })
     setAccontiTotali(mapAcc)
+    setAccontiDettaglio(mapAccDet)
 
     // Stipendio calcolato per il mese corrente (vista stipendi_calcolati)
     const primoGiornoMeseCorrente = primoGiornoMeseLocale()
@@ -143,6 +149,27 @@ export default function Dipendenti() {
     }
   }
 
+  async function terminaRapporto(d) {
+    if (!confirm(`Terminare il rapporto di lavoro con ${d.nome}? Il dipendente verrà spostato tra gli ex dipendenti. I dati storici (presenze, acconti) restano conservati.`)) return
+    const { error } = await supabase.from('dipendenti').update({ attivo: false }).eq('id', d.id)
+    if (error) alert('Errore: ' + error.message)
+    else { setDipendenteAperto(null); carica() }
+  }
+
+  async function riassumi(d) {
+    if (!confirm(`Riassumere ${d.nome}? Il dipendente tornerà nella lista attiva.`)) return
+    const { error } = await supabase.from('dipendenti').update({ attivo: true }).eq('id', d.id)
+    if (error) alert('Errore: ' + error.message)
+    else carica()
+  }
+
+  async function eliminaAcconto(id, nomeDip) {
+    if (!confirm(`Eliminare questo acconto di ${nomeDip}? Verrà rimossa anche la relativa voce dalle Uscite.`)) return
+    const { error } = await supabase.from('acconti').delete().eq('id', id)
+    if (error) alert('Errore: ' + error.message)
+    else carica()
+  }
+
   function apriModifica(d) {
     setEditForm({
       nome: d.nome || '',
@@ -198,7 +225,10 @@ export default function Dipendenti() {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <input type="date" value={dataSelezionata} onChange={(e) => setDataSelezionata(e.target.value)} style={{ padding: '9px 12px', borderRadius: 6, border: '1px solid var(--linea)' }} />
-          {isMaster && (
+          <button className="btn btn-ghost" onClick={() => setMostraExDipendenti((v) => !v)}>
+            {mostraExDipendenti ? 'Mostra attivi' : 'Ex dipendenti'}
+          </button>
+          {isMaster && !mostraExDipendenti && (
             <button className="btn btn-primary" onClick={() => setMostraNuovo((v) => !v)}>
               {mostraNuovo ? 'Annulla' : '+ Nuovo dipendente'}
             </button>
@@ -242,16 +272,22 @@ export default function Dipendenti() {
 
       {loading ? (
         <p className="page-subtitle">Caricamento…</p>
-      ) : dipendenti.length === 0 ? (
-        <div className="empty-state card">
-          <div className="empty-state-title">Nessun dipendente registrato</div>
-          <p>{isMaster ? 'Aggiungi il primo dipendente con il pulsante sopra.' : 'Il Master non ha ancora aggiunto dipendenti.'}</p>
-        </div>
       ) : (
+        <>
+        {(() => {
+          const lista = dipendenti.filter((d) => mostraExDipendenti ? !d.attivo : d.attivo)
+          if (lista.length === 0) return (
+            <div className="empty-state card">
+              <div className="empty-state-title">{mostraExDipendenti ? 'Nessun ex dipendente' : 'Nessun dipendente attivo'}</div>
+              <p>{mostraExDipendenti ? 'Non ci sono dipendenti con rapporto terminato.' : isMaster ? 'Aggiungi il primo dipendente con il pulsante sopra.' : 'Il Master non ha ancora aggiunto dipendenti.'}</p>
+            </div>
+          )
+          return (
         <div style={{ display: 'grid', gap: 12 }}>
-          {dipendenti.map((d) => {
+          {lista.map((d) => {
             const stato = presenzeOggi[d.id]?.stato
             const acconti = accontiTotali[d.id] || { eur: 0, egp: 0 }
+            const righeAcconti = accontiDettaglio[d.id] || []
             const calcoloMese = stipendiCalcolati[d.id]
             const stipendioDovutoEur = calcoloMese ? Number(calcoloMese.stipendio_dovuto_eur) : Number(d.stipendio_eur)
             const stipendioDovutoEgp = calcoloMese ? Number(calcoloMese.stipendio_dovuto_egp) : Number(d.stipendio_egp)
@@ -440,7 +476,51 @@ export default function Dipendenti() {
                       </p>
                     )}
 
-                    {puoSegnare && (
+                    )}
+
+                    {/* ── Storico acconti ── */}
+                    {righeAcconti.length > 0 && (
+                      <div style={{ marginTop: 20, marginBottom: 16 }}>
+                        <h4 style={{ fontSize: 14, marginBottom: 10, fontFamily: 'var(--font-body)' }}>Storico acconti</h4>
+                        <div style={{ overflowX: 'auto' }}>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Data</th>
+                                <th>Importo €</th>
+                                <th>Importo LE</th>
+                                <th>Erogato da</th>
+                                <th>Note</th>
+                                {isMaster && <th></th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {righeAcconti.map((a) => (
+                                <tr key={a.id}>
+                                  <td>{new Date(a.data).toLocaleDateString('it-IT')}</td>
+                                  <td>{Number(a.importo_eur) > 0 ? `€ ${Number(a.importo_eur).toFixed(2)}` : '—'}</td>
+                                  <td>{Number(a.importo_egp) > 0 ? `${Number(a.importo_egp).toFixed(0)} LE` : '—'}</td>
+                                  <td style={{ textTransform: 'capitalize', color: 'var(--inchiostro-soft)' }}>
+                                    {a.erogato_da === 'direttore' ? 'Cassa ristorante' : a.erogato_da}
+                                  </td>
+                                  <td style={{ color: 'var(--inchiostro-soft)' }}>{a.note || '—'}</td>
+                                  {isMaster && (
+                                    <td>
+                                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaAcconto(a.id, d.nome)}>
+                                        Elimina
+                                      </button>
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Registra acconto ── */}
+                    {puoSegnare && d.attivo && (
                       <div>
                         <h4 style={{ fontSize: 14, marginBottom: 10, fontFamily: 'var(--font-body)' }}>Registra un acconto</h4>
                         <div className="form-grid">
@@ -470,12 +550,30 @@ export default function Dipendenti() {
                         </button>
                       </div>
                     )}
+
+                    {/* ── Termina / Riassumi rapporto ── */}
+                    {isMaster && (
+                      <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--linea)' }}>
+                        {d.attivo ? (
+                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => terminaRapporto(d)}>
+                            Termina rapporto di lavoro
+                          </button>
+                        ) : (
+                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--smeraldo)' }} onClick={() => riassumi(d)}>
+                            ↩ Riassumi
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )
           })}
         </div>
+          )
+        })()}
+        </>
       )}
     </div>
   )
