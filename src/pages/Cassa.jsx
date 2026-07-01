@@ -19,22 +19,26 @@ export default function Cassa() {
   const [cambioForm, setCambioForm] = useState({ valuta_da: 'EUR', importo_da: '', valuta_a: 'EGP', importo_a: '', note: '' })
   const [prelievoForm, setPrelievoForm] = useState({ importo_pos: '', note: '' })
 
-  const [storicoChiusure, setStoricoChiusure] = useState([])
+  const [periodoAperto, setPeriodoAperto] = useState(null)
+  const [storicoPeriodi, setStoricoPeriodi] = useState([])
   const [mostraConfermaChiusura, setMostraConfermaChiusura] = useState(false)
   const [noteChiusura, setNoteChiusura] = useState('')
   const [chiudendo, setChiudendo] = useState(false)
   const [mostraStorico, setMostraStorico] = useState(false)
+  const [riaprendo, setRiaprendo] = useState(false)
 
   async function carica() {
     setLoading(true)
-    const [{ data: s }, { data: m }, { data: st }] = await Promise.all([
+    const [{ data: s }, { data: m }, { data: pAperto }, { data: pStorico }] = await Promise.all([
       supabase.from('saldo_cassa_attuale').select('*').single(),
       supabase.from('movimenti_cassa').select('*, profiles:inserito_da(nome)').order('created_at', { ascending: false }).limit(30),
-      supabase.from('chiusure_cassa').select('*, profiles:chiuso_da(nome)').order('created_at', { ascending: false }),
+      supabase.from('periodi_cassa').select('*').is('data_chiusura', null).single(),
+      supabase.from('periodi_cassa').select('*, profiles:chiuso_da(nome)').not('data_chiusura', 'is', null).order('data_chiusura', { ascending: false }),
     ])
     setSaldo(s)
     setMovimenti(m || [])
-    setStoricoChiusure(st || [])
+    setPeriodoAperto(pAperto || null)
+    setStoricoPeriodi(pStorico || [])
     setLoading(false)
   }
 
@@ -92,16 +96,10 @@ export default function Cassa() {
   }
 
   async function chiudiPeriodo() {
-    if (!saldo) return
     setChiudendo(true)
-    const { error } = await supabase.from('chiusure_cassa').insert({
-      data_chiusura: oggi(),
-      contanti_eur: Number(saldo.contanti_eur) || 0,
-      contanti_egp: Number(saldo.contanti_egp) || 0,
-      contanti_usd: Number(saldo.contanti_usd) || 0,
-      saldo_pos_egp: Number(saldo.saldo_pos_egp) || 0,
-      note: noteChiusura || null,
-      chiuso_da: profile.id,
+    const { error } = await supabase.rpc('chiudi_periodo_cassa', {
+      p_note: noteChiusura || null,
+      p_chiuso_da: profile.id,
     })
     setChiudendo(false)
     if (!error) {
@@ -113,11 +111,17 @@ export default function Cassa() {
     }
   }
 
-  async function eliminaChiusura(id) {
-    if (!confirm('Annullare questa chiusura? Il saldo corrente tornerà a contare anche i movimenti precedenti.')) return
-    const { error } = await supabase.from('chiusure_cassa').delete().eq('id', id)
-    if (!error) carica()
-    else alert('Errore: ' + error.message)
+  async function riapriPeriodo(id) {
+    if (!confirm('Riaprire questo periodo passato per correggerlo? Finché resta riaperto non potrai inserire nuovi incassi/uscite/movimenti: ricordati di richiuderlo subito dopo la correzione per tornare al periodo corrente.')) return
+    setRiaprendo(true)
+    const { error } = await supabase.rpc('riapri_periodo_cassa', { p_periodo_id: id })
+    setRiaprendo(false)
+    if (!error) {
+      setMostraStorico(false)
+      carica()
+    } else {
+      alert('Errore: ' + error.message)
+    }
   }
 
   const tassoEffettivo = (Number(cambioForm.importo_da) > 0 && Number(cambioForm.importo_a) > 0)
@@ -133,15 +137,25 @@ export default function Cassa() {
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn btn-ghost" onClick={() => setMostraStorico((v) => !v)}>
-            {mostraStorico ? '✕ Chiudi storico' : 'Storico chiusure'}
+            {mostraStorico ? '✕ Chiudi storico' : 'Storico periodi'}
           </button>
-          {isMaster && (
+          {isMaster && !(periodoAperto && storicoPeriodi.find((p) => p.id === periodoAperto.id)) && (
             <button className="btn btn-primary" onClick={() => setMostraConfermaChiusura(true)}>
               🔒 Chiudi periodo
             </button>
           )}
         </div>
       </div>
+
+      {isMaster && periodoAperto && storicoPeriodi.find((p) => p.id === periodoAperto.id) && (
+        <div className="card" style={{ marginBottom: 24, borderLeft: '3px solid var(--corallo)', background: 'rgba(217,104,79,0.06)' }}>
+          <strong style={{ color: 'var(--corallo)' }}>⚠️ Stai lavorando su un periodo passato riaperto</strong>
+          <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)', margin: '6px 0 12px' }}>
+            Le modifiche che fai ora (incassi, uscite, movimenti) appartengono a questo vecchio periodo, non al mese corrente. Richiudilo appena hai finito di correggerlo per tornare a lavorare sul periodo attuale.
+          </p>
+          <button className="btn btn-primary btn-sm" onClick={() => setMostraConfermaChiusura(true)}>Richiudi questo periodo</button>
+        </div>
+      )}
 
       {mostraConfermaChiusura && saldo && (
         <div className="card" style={{ marginBottom: 24, borderLeft: '3px solid var(--corallo)' }}>
@@ -182,15 +196,16 @@ export default function Cassa() {
 
       {mostraStorico && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <h3 style={{ fontSize: 15, marginBottom: 14 }}>Storico chiusure periodo</h3>
-          {storicoChiusure.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>Nessuna chiusura registrata finora.</p>
+          <h3 style={{ fontSize: 15, marginBottom: 14 }}>Storico periodi chiusi</h3>
+          {storicoPeriodi.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>Nessun periodo chiuso finora.</p>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table>
                 <thead>
                   <tr>
-                    <th>Data</th>
+                    <th>Periodo</th>
+                    <th>Chiuso il</th>
                     <th>Contanti €</th>
                     <th>Contanti LE</th>
                     <th>Contanti $</th>
@@ -201,8 +216,9 @@ export default function Cassa() {
                   </tr>
                 </thead>
                 <tbody>
-                  {storicoChiusure.map((c) => (
+                  {storicoPeriodi.map((c) => (
                     <tr key={c.id}>
+                      <td>#{c.numero}</td>
                       <td>{new Date(c.data_chiusura).toLocaleDateString('it-IT')}</td>
                       <td>€ {Number(c.contanti_eur).toFixed(2)}</td>
                       <td>{Number(c.contanti_egp).toFixed(0)} LE</td>
@@ -212,7 +228,9 @@ export default function Cassa() {
                       <td style={{ color: 'var(--inchiostro-soft)' }}>{c.profiles?.nome || '—'}</td>
                       {isMaster && (
                         <td>
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaChiusura(c.id)}>Elimina</button>
+                          <button className="btn btn-ghost btn-sm" disabled={!!periodoAperto && storicoPeriodi.find((p) => p.id === periodoAperto.id)} onClick={() => riapriPeriodo(c.id)}>
+                            Riapri
+                          </button>
                         </td>
                       )}
                     </tr>
