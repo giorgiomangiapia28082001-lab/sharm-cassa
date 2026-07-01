@@ -163,6 +163,14 @@ export default function Dipendenti() {
     else carica()
   }
 
+  async function eliminaDipendente(d) {
+    if (!confirm(`ELIMINAZIONE DEFINITIVA di ${d.nome}.\n\nATTENZIONE: verranno eliminati anche tutti i suoi dati storici (presenze, acconti, stipendi). Questa azione non può essere annullata.\n\nContinuare?`)) return
+    if (!confirm(`Sei sicuro? Tutti i dati di ${d.nome} verranno cancellati per sempre.`)) return
+    const { error } = await supabase.from('dipendenti').delete().eq('id', d.id)
+    if (error) alert('Errore: ' + error.message)
+    else { setDipendenteAperto(null); carica() }
+  }
+
   async function eliminaAcconto(id, nomeDip) {
     if (!confirm(`Eliminare questo acconto di ${nomeDip}? Verrà rimossa anche la relativa voce dalle Uscite.`)) return
     const { error } = await supabase.from('acconti').delete().eq('id', id)
@@ -311,30 +319,61 @@ export default function Dipendenti() {
                     <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>{d.ruolo_lavoro || '—'}</div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      className={`attendance-pill ${stato === 'presente' ? 'presente' : 'vuoto'}`}
-                      onClick={() => segnaPresenza(d.id, 'presente', d.nome)}
-                      disabled={!puoSegnare}
-                      title="Presente"
-                    >P</button>
-                    <button
-                      className={`attendance-pill ${stato === 'parziale' ? 'parziale' : 'vuoto'}`}
-                      onClick={() => segnaPresenza(d.id, 'parziale', d.nome)}
-                      disabled={!puoSegnare}
-                      title="Parziale"
-                    >½</button>
-                    <button
-                      className={`attendance-pill ${stato === 'assente' ? 'assente' : 'vuoto'}`}
-                      onClick={() => segnaPresenza(d.id, 'assente', d.nome)}
-                      disabled={!puoSegnare}
-                      title="Assente"
-                    >A</button>
-                  </div>
+                  {/* Pulsanti presenze — solo per dipendenti attivi */}
+                  {d.attivo && (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        className={`attendance-pill ${stato === 'presente' ? 'presente' : 'vuoto'}`}
+                        onClick={() => segnaPresenza(d.id, 'presente', d.nome)}
+                        disabled={!puoSegnare}
+                        title="Presente"
+                      >P</button>
+                      <button
+                        className={`attendance-pill ${stato === 'parziale' ? 'parziale' : 'vuoto'}`}
+                        onClick={() => segnaPresenza(d.id, 'parziale', d.nome)}
+                        disabled={!puoSegnare}
+                        title="Parziale"
+                      >½</button>
+                      <button
+                        className={`attendance-pill ${stato === 'assente' ? 'assente' : 'vuoto'}`}
+                        onClick={() => segnaPresenza(d.id, 'assente', d.nome)}
+                        disabled={!puoSegnare}
+                        title="Assente"
+                      >A</button>
+                    </div>
+                  )}
 
-                  {isMaster && (
+                  {/* Azioni Master nella riga principale */}
+                  {isMaster && d.attivo && (
                     <button className="btn btn-ghost btn-sm" onClick={() => apriModifica(d)}>
                       Modifica
+                    </button>
+                  )}
+                  {isMaster && d.attivo && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--corallo)' }}
+                      onClick={() => terminaRapporto(d)}
+                    >
+                      Termina
+                    </button>
+                  )}
+                  {isMaster && !d.attivo && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--smeraldo)' }}
+                      onClick={() => riassumi(d)}
+                    >
+                      ↩ Riassumi
+                    </button>
+                  )}
+                  {isMaster && !d.attivo && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--corallo)' }}
+                      onClick={() => eliminaDipendente(d)}
+                    >
+                      Elimina
                     </button>
                   )}
 
@@ -551,20 +590,6 @@ export default function Dipendenti() {
                       </div>
                     )}
 
-                    {/* ── Termina / Riassumi rapporto ── */}
-                    {isMaster && (
-                      <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--linea)' }}>
-                        {d.attivo ? (
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => terminaRapporto(d)}>
-                            Termina rapporto di lavoro
-                          </button>
-                        ) : (
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--smeraldo)' }} onClick={() => riassumi(d)}>
-                            ↩ Riassumi
-                          </button>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
