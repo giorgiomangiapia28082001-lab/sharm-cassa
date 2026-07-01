@@ -46,9 +46,16 @@ export default function Dipendenti() {
     setPresenzeOggi(mapPres)
 
     const { data: acc } = await supabase.from('acconti').select('*').order('data', { ascending: false })
+
+    // Recupera il periodo cassa aperto per filtrare gli acconti
+    const { data: periodoAperto } = await supabase.from('periodi_cassa').select('id').is('data_chiusura', null).single()
+    const periodoCassaId = periodoAperto?.id || null
+
     const mapAcc = {}
     const mapAccDet = {}
     ;(acc || []).forEach((a) => {
+      // Mostra solo gli acconti del periodo cassa corrente
+      if (periodoCassaId && a.periodo_cassa_id && a.periodo_cassa_id !== periodoCassaId) return
       if (!mapAcc[a.dipendente_id]) mapAcc[a.dipendente_id] = { eur: 0, egp: 0 }
       mapAcc[a.dipendente_id].eur += Number(a.importo_eur) || 0
       mapAcc[a.dipendente_id].egp += Number(a.importo_egp) || 0
@@ -307,12 +314,29 @@ export default function Dipendenti() {
               <div key={d.id} className="card">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   {d.foto_url ? (
-                    <img src={d.foto_url} alt={d.nome} className="photo-thumb" />
-                  ) : (
-                    <div className="photo-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--sabbia-chiara)', color: 'var(--notte)', fontWeight: 700 }}>
-                      {d.nome.charAt(0)}
-                    </div>
-                  )}
+                    <img
+                      src={d.foto_url}
+                      alt={d.nome}
+                      className="photo-thumb"
+                      onError={(e) => {
+                        e.target.style.display = 'none'
+                        e.target.nextSibling.style.display = 'flex'
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className="photo-thumb"
+                    style={{
+                      display: d.foto_url ? 'none' : 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'var(--sabbia-chiara)',
+                      color: 'var(--notte)',
+                      fontWeight: 700
+                    }}
+                  >
+                    {d.nome.charAt(0)}
+                  </div>
 
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 15.5 }}>{d.nome}</div>
