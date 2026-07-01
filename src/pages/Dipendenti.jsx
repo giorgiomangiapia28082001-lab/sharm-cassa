@@ -103,19 +103,33 @@ export default function Dipendenti() {
     carica()
   }
 
+  async function fotoToBase64(file) {
+    return new Promise((resolve, reject) => {
+      // Ridimensiona a max 200px per non appesantire il DB
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        const MAX = 200
+        const scale = Math.min(MAX / img.width, MAX / img.height, 1)
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        URL.revokeObjectURL(url)
+        resolve(canvas.toDataURL('image/jpeg', 0.82))
+      }
+      img.onerror = reject
+      img.src = url
+    })
+  }
+
   async function salvaNuovoDipendente(e) {
     e.preventDefault()
     setSalvandoNuovo(true)
 
     let foto_url = null
     if (nuovo.foto) {
-      const ext = nuovo.foto.name.split('.').pop()
-      const path = `dipendenti/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: uploadError } = await supabase.storage.from('foto').upload(path, nuovo.foto)
-      if (!uploadError) {
-        const { data } = supabase.storage.from('foto').getPublicUrl(path)
-        foto_url = data.publicUrl
-      }
+      try { foto_url = await fotoToBase64(nuovo.foto) } catch (err) { console.error('Errore foto:', err) }
     }
 
     const { error } = await supabase.from('dipendenti').insert({
@@ -204,13 +218,7 @@ export default function Dipendenti() {
 
     let foto_url = editForm.foto_url_attuale
     if (editForm.foto) {
-      const ext = editForm.foto.name.split('.').pop()
-      const path = `dipendenti/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: uploadError } = await supabase.storage.from('foto').upload(path, editForm.foto)
-      if (!uploadError) {
-        const { data } = supabase.storage.from('foto').getPublicUrl(path)
-        foto_url = data.publicUrl
-      }
+      try { foto_url = await fotoToBase64(editForm.foto) } catch (err) { console.error('Errore foto:', err) }
     }
 
     const { error } = await supabase.from('dipendenti').update({
