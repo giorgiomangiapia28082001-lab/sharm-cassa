@@ -208,7 +208,7 @@ export default function Sadiki() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Sadiki</h1>
-          <p className="page-subtitle">Vendita prodotti al kg — produzioni giornaliere e pagamenti ricevuti.</p>
+          <p className="page-subtitle">Vendita prodotti al kg/pezzi — produzioni giornaliere e pagamenti ricevuti.</p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {puoInserire && (
@@ -259,7 +259,7 @@ export default function Sadiki() {
         <div className="card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Totale consegnato</div>
           <div style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--notte)' }}>€ {fmt(totaleDebito)}</div>
-          <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>{produzioni.length} produzioni · {fmtKg(produzioni.reduce((a, p) => a + Number(p.kg), 0))} kg tot.</div>
+          <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>{produzioni.length} produzioni · {fmtKg(produzioni.reduce((a, p) => a + Number(p.kg), 0))} kg/pz tot.</div>
         </div>
         <div className="card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Già pagato</div>
@@ -293,11 +293,11 @@ export default function Sadiki() {
               <input type="text" value={formProd.prodotto} onChange={(e) => setFormProd((f) => ({ ...f, prodotto: e.target.value }))} placeholder="es. Pane, Pizzette Margherita…" required />
             </div>
             <div className="field">
-              <label>Kg consegnati</label>
+              <label>Kg / Pezzi consegnati</label>
               <input type="number" step="0.001" min="0.001" value={formProd.kg} onChange={(e) => setFormProd((f) => ({ ...f, kg: e.target.value }))} placeholder="0.000" required />
             </div>
             <div className="field">
-              <label>Prezzo al kg (€)</label>
+              <label>Prezzo al kg/pezzo (€)</label>
               <input type="number" step="0.01" min="0" value={formProd.prezzo_kg_eur} onChange={(e) => setFormProd((f) => ({ ...f, prezzo_kg_eur: e.target.value }))} placeholder="0.00" required />
             </div>
             <div className="field">
@@ -393,7 +393,7 @@ export default function Sadiki() {
                         {new Date(data + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
                       </div>
                       <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>
-                        {fmtKg(kgGiorno)} kg · <strong>€ {fmt(totGiorno)}</strong>
+                        {fmtKg(kgGiorno)} kg/pz · <strong>€ {fmt(totGiorno)}</strong>
                       </div>
                     </div>
 
@@ -408,7 +408,7 @@ export default function Sadiki() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: 14 }}>{p.prodotto}</div>
                             <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
-                              {fmtKg(p.kg)} kg × € {fmt(p.prezzo_kg_eur)}/kg
+                              {fmtKg(p.kg)} kg/pz × € {fmt(p.prezzo_kg_eur)} cad.
                             </div>
                             {p.note && <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 3 }}>{p.note}</div>}
                           </div>
