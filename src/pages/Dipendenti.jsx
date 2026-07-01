@@ -129,17 +129,22 @@ export default function Dipendenti() {
 
     let foto_url = null
     if (nuovo.foto) {
-      try { foto_url = await fotoToBase64(nuovo.foto) } catch (err) { console.error('Errore foto:', err) }
+      try {
+        foto_url = await fotoToBase64(nuovo.foto)
+      } catch (err) {
+        console.error('Errore conversione foto:', err)
+      }
     }
 
-    const { error } = await supabase.from('dipendenti').insert({
+    const { data: inserted, error } = await supabase.from('dipendenti').insert({
       nome: nuovo.nome,
       ruolo_lavoro: nuovo.ruolo_lavoro || null,
       data_inizio: nuovo.data_inizio || null,
       stipendio_eur: Number(nuovo.stipendio_eur) || 0,
       stipendio_egp: Number(nuovo.stipendio_egp) || 0,
       foto_url,
-    })
+    }).select()
+    if (error) { setSalvandoNuovo(false); alert('Errore salvataggio: ' + error.message); return }
     setSalvandoNuovo(false)
     if (!error) {
       setNuovo({ nome: '', ruolo_lavoro: '', data_inizio: '', stipendio_eur: '', stipendio_egp: '', foto: null })
@@ -218,7 +223,11 @@ export default function Dipendenti() {
 
     let foto_url = editForm.foto_url_attuale
     if (editForm.foto) {
-      try { foto_url = await fotoToBase64(editForm.foto) } catch (err) { console.error('Errore foto:', err) }
+      try {
+        foto_url = await fotoToBase64(editForm.foto)
+      } catch (err) {
+        console.error('Errore conversione foto:', err)
+      }
     }
 
     const { error } = await supabase.from('dipendenti').update({
