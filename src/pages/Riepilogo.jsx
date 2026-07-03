@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/AuthContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { oggiLocale, primoGiornoMeseLocale } from '../lib/date'
 
@@ -9,6 +10,7 @@ const inizioMese = primoGiornoMeseLocale
 const primoGiornoMese = primoGiornoMeseLocale
 
 export default function Riepilogo() {
+  const { isMaster } = useAuth()
   const [loading, setLoading] = useState(true)
   const [incassi, setIncassi] = useState([])
   const [uscite, setUscite] = useState([])
@@ -16,6 +18,7 @@ export default function Riepilogo() {
   const [dataInizio, setDataInizio] = useState(inizioMese())
   const [dataFine, setDataFine] = useState(oggi())
   const [speseFisseNonPagate, setSpeseFisseNonPagate] = useState([])
+  const [targetData, setTargetData] = useState(null)
 
   async function caricaSpeseFisse() {
     const mese = primoGiornoMese()
@@ -27,6 +30,65 @@ export default function Riepilogo() {
     setSpeseFisseNonPagate((voci || []).filter((v) => !pagateIds.has(v.id)))
   }
 
+  async function caricaTarget(eurUsdRate, eurEgpRate) {
+    // 1. Spese fisse mensili (tutte le voci attive)
+    const { data: speseFisse } = await supabase.from('spese_fisse').select('*').eq('attiva', true)
+
+    // 2. Stipendi dipendenti attivi
+    const { data: dipendenti } = await supabase.from('dipendenti').select('stipendio_eur, stipendio_egp').eq('attivo', true)
+
+    // 3. Media uscite variabili ultimi 3 mesi (escludendo stipendi/acconti che sono già contati)
+    const treM = new Date()
+    treM.setMonth(treM.getMonth() - 3)
+    const dataTreM = treM.toISOString().slice(0, 10)
+    const { data: usciteStorico } = await supabase
+      .from('uscite')
+      .select('importo, valuta, categorie_uscite(nome)')
+      .gte('data', dataTreM)
+
+    // Calcola totale spese fisse in EUR
+    const speseFisseEur = (speseFisse || []).reduce((acc, v) => {
+      if (v.valuta === 'EUR') return acc + Number(v.importo)
+      if (v.valuta === 'USD') return acc + Number(v.importo) / eurUsdRate
+      if (v.valuta === 'EGP') return acc + Number(v.importo) / eurEgpRate
+      return acc
+    }, 0)
+
+    // Calcola stipendi mensili totali in EUR
+    const stipendiEur = (dipendenti || []).reduce((acc, d) => {
+      return acc + Number(d.stipendio_eur) + Number(d.stipendio_egp) / eurEgpRate
+    }, 0)
+
+    // Media uscite variabili (escludi categorie Dipendenti per non contarli due volte)
+    const usciteVariabiliEur = (usciteStorico || [])
+      .filter((u) => u.categorie_uscite?.nome !== 'Dipendenti')
+      .reduce((acc, u) => {
+        if (u.valuta === 'EUR') return acc + Number(u.importo)
+        if (u.valuta === 'USD') return acc + Number(u.importo) / eurUsdRate
+        if (u.valuta === 'EGP') return acc + Number(u.importo) / eurEgpRate
+        return acc
+      }, 0)
+    const mediaUsciteVariabiliMensili = usciteVariabiliEur / 3
+
+    // Giorni del mese corrente
+    const now = new Date()
+    const giorniMese = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+
+    const totaleMensile = speseFisseEur + stipendiEur + mediaUsciteVariabiliMensili
+    const targetGiornaliero = totaleMensile / giorniMese
+
+    setTargetData({
+      speseFisseEur,
+      stipendiEur,
+      mediaUsciteVariabiliMensili,
+      totaleMensile,
+      targetGiornaliero,
+      giorniMese,
+      nDipendenti: (dipendenti || []).length,
+      nSpeseFisse: (speseFisse || []).length,
+    })
+  }
+
   async function carica() {
     setLoading(true)
     const [{ data: inc }, { data: usc }, { data: t }] = await Promise.all([
@@ -36,8 +98,10 @@ export default function Riepilogo() {
     ])
     setIncassi(inc || [])
     setUscite(usc || [])
-    if (t && t.length) setTassi(t[0])
+    const t0 = t && t.length ? t[0] : { eur_usd: 1.08, eur_egp: 60 }
+    if (t && t.length) setTassi(t0)
     setLoading(false)
+    if (true) await caricaTarget(Number(t0.eur_usd) || 1.08, Number(t0.eur_egp) || 60)
   }
 
   useEffect(() => { carica(); caricaSpeseFisse() }, [dataInizio, dataFine])
@@ -148,6 +212,81 @@ export default function Riepilogo() {
               </div>
             </div>
           </div>
+
+          {/* ── TARGET GIORNALIERO — solo Master ── */}
+          {isMaster && targetData && (() => {
+            const { speseFisseEur, stipendiEur, mediaUsciteVariabiliMensili, totaleMensile, targetGiornaliero, giorniMese, nDipendenti, nSpeseFisse } = targetData
+            const incassoOggi = incassiInEur / Math.max(1, serieGiornaliera.length)
+            const distanza = incassoOggi - targetGiornaliero
+            const percentuale = targetGiornaliero > 0 ? Math.round((incassoOggi / targetGiornaliero) * 100) : 0
+            return (
+              <div className="card" style={{ marginBottom: 28, borderLeft: '4px solid var(--notte)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--notte)' }}>🎯 Target giornaliero</div>
+                    <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
+                      Quanto devi incassare ogni giorno per coprire tutte le spese del mese ({giorniMese} giorni)
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 32, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--notte)' }}>
+                      € {targetGiornaliero.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)' }}>al giorno</div>
+                  </div>
+                </div>
+
+                {/* Barra progresso */}
+                {serieGiornaliera.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                      <span style={{ color: 'var(--inchiostro-soft)' }}>Media incasso giornaliero nel periodo</span>
+                      <span style={{ fontWeight: 700, color: distanza >= 0 ? 'var(--smeraldo)' : 'var(--corallo)' }}>
+                        € {incassoOggi.toFixed(2)} ({percentuale}%)
+                      </span>
+                    </div>
+                    <div style={{ height: 10, borderRadius: 5, background: 'var(--sabbia-chiara)', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${Math.min(percentuale, 100)}%`,
+                        borderRadius: 5,
+                        background: percentuale >= 100 ? 'var(--smeraldo)' : percentuale >= 70 ? '#f5a623' : 'var(--corallo)',
+                        transition: 'width 0.4s ease',
+                      }} />
+                    </div>
+                    <div style={{ fontSize: 12, color: distanza >= 0 ? 'var(--smeraldo)' : 'var(--corallo)', marginTop: 5, fontWeight: 600 }}>
+                      {distanza >= 0
+                        ? `✓ Stai incassando € ${distanza.toFixed(2)}/giorno in più del necessario`
+                        : `⚠ Mancano € ${Math.abs(distanza).toFixed(2)}/giorno per andare in pari`}
+                    </div>
+                  </div>
+                )}
+
+                {/* Dettaglio costi */}
+                <div style={{ borderTop: '1px solid var(--linea)', paddingTop: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--inchiostro-soft)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Composizione costi mensili</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                    <div style={{ padding: '10px 12px', background: 'var(--sabbia-chiara)', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)' }}>Spese fisse ({nSpeseFisse} voci)</div>
+                      <div style={{ fontWeight: 700, fontSize: 15, marginTop: 2 }}>€ {speseFisseEur.toFixed(2)}</div>
+                    </div>
+                    <div style={{ padding: '10px 12px', background: 'var(--sabbia-chiara)', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)' }}>Stipendi ({nDipendenti} dip. attivi)</div>
+                      <div style={{ fontWeight: 700, fontSize: 15, marginTop: 2 }}>€ {stipendiEur.toFixed(2)}</div>
+                    </div>
+                    <div style={{ padding: '10px 12px', background: 'var(--sabbia-chiara)', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)' }}>Spese variabili (media 3 mesi)</div>
+                      <div style={{ fontWeight: 700, fontSize: 15, marginTop: 2 }}>€ {mediaUsciteVariabiliMensili.toFixed(2)}</div>
+                    </div>
+                    <div style={{ padding: '10px 12px', background: 'var(--notte)', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Totale mensile stimato</div>
+                      <div style={{ fontWeight: 700, fontSize: 15, marginTop: 2, color: '#fff' }}>€ {totaleMensile.toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           <div className="card" style={{ marginBottom: 28 }}>
             <h3 style={{ fontSize: 15, marginBottom: 16, fontFamily: 'var(--font-body)', fontWeight: 700 }}>Andamento giornaliero (in EUR equivalente)</h3>
