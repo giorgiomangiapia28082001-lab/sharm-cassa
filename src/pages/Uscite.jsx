@@ -250,49 +250,50 @@ export default function Uscite() {
           <p>Quando inserisci la prima spesa, apparirà qui.</p>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Descrizione</th>
-                <th>Categoria</th>
-                <th>Importo</th>
-                <th>Metodo</th>
-                <th>Foto</th>
-                <th>Inserito da</th>
-                {isMaster && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {righeFiltrate.map((r) => (
-                <tr key={r.id}>
-                  <td>{new Date(r.data).toLocaleDateString('it-IT')}</td>
-                  <td>
-                    {r.descrizione}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {righeFiltrate.map((r) => (
+            <div key={r.id} className="card" style={{ padding: '14px' }}>
+              {/* Riga principale: data + importo */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>
+                    {r.descrizione || '—'}
                     {r.generato_da_acconto_id && (
                       <span className="tag" style={{ marginLeft: 8, background: 'var(--sabbia-chiara)', fontSize: 11 }}>acconto</span>
                     )}
-                  </td>
-                  <td><span className="tag">{r.categorie_uscite?.nome}</span></td>
-                  <td>{simboloValuta[r.valuta]} {Number(r.importo).toFixed(2)}</td>
-                  <td style={{ textTransform: 'capitalize' }}>{r.metodo_pagamento}</td>
-                  <td>
-                    {r.foto_url ? (
-                      <a href={r.foto_url} target="_blank" rel="noreferrer">Vedi foto</a>
-                    ) : '—'}
-                  </td>
-                  <td style={{ color: 'var(--inchiostro-soft)' }}>{r.profiles?.nome || '—'}</td>
-                  {isMaster && (
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => apriModificaRiga(r)}>Modifica</button>
-                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaRiga(r)}>Elimina</button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
+                    {new Date(r.data).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {' · '}{r.profiles?.nome || '—'}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--corallo)' }}>
+                    {simboloValuta[r.valuta]} {Number(r.importo).toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginTop: 2, textTransform: 'capitalize' }}>
+                    {r.metodo_pagamento || '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tag categoria + foto */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="tag">{r.categorie_uscite?.nome}</span>
+                {r.foto_url && (
+                  <a href={r.foto_url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>📎 Vedi foto</a>
+                )}
+              </div>
+
+              {/* Azioni Master */}
+              {isMaster && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--linea)' }}>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => apriModificaRiga(r)}>Modifica</button>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaRiga(r)}>Elimina</button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

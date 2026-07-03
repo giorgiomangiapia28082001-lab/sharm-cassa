@@ -235,48 +235,45 @@ export default function Incassi() {
           <p>Quando inserisci il primo incasso, apparirà qui.</p>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>€ Contanti</th>
-                <th>€ Fondo cassa</th>
-                <th>€ Bonifici</th>
-                <th>LE POS</th>
-                <th>LE Contanti</th>
-                <th>$ Contanti</th>
-                <th>Delivery €</th>
-                <th>Delivery LE</th>
-                <th>Persone</th>
-                <th>Inserito da</th>
-                {isMaster && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {righe.map((r) => (
-                <tr key={r.id}>
-                  <td>{new Date(r.data).toLocaleDateString('it-IT')}</td>
-                  <td>€ {Number(r.eur_contanti).toFixed(2)}</td>
-                  <td>€ {Number(r.fondo_cassa).toFixed(2)}</td>
-                  <td>€ {Number(r.bonifici).toFixed(2)}</td>
-                  <td>{Number(r.egp_pos).toFixed(0)} LE</td>
-                  <td>{Number(r.egp_contanti).toFixed(0)} LE</td>
-                  <td>$ {Number(r.usd_contanti).toFixed(2)}</td>
-                  <td>€ {Number(r.delivery_eur || 0).toFixed(2)}</td>
-                  <td>{Number(r.delivery_egp || 0).toFixed(0)} LE</td>
-                  <td>{r.numero_persone}</td>
-                  <td style={{ color: 'var(--inchiostro-soft)' }}>{r.profiles?.nome || '—'}</td>
-                  {isMaster && (
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => apriModificaRiga(r)}>Modifica</button>
-                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaRiga(r.id)}>Elimina</button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {righe.map((r) => {
+            const totEur = Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici) + Number(r.delivery_eur || 0)
+            return (
+              <div key={r.id} className="card" style={{ padding: '14px' }}>
+                {/* Riga principale: data + totale EUR */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>
+                    {new Date(r.data).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </div>
+                  <div style={{ fontWeight: 700, color: 'var(--smeraldo)', fontSize: 15 }}>
+                    € {totEur.toFixed(2)}
+                  </div>
+                </div>
+
+                {/* Griglia valori */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '6px 12px', fontSize: 13 }}>
+                  {Number(r.eur_contanti) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti €</span><br /><strong>€ {Number(r.eur_contanti).toFixed(2)}</strong></div>}
+                  {Number(r.fondo_cassa) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Fondo cassa</span><br /><strong>€ {Number(r.fondo_cassa).toFixed(2)}</strong></div>}
+                  {Number(r.bonifici) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Bonifici</span><br /><strong>€ {Number(r.bonifici).toFixed(2)}</strong></div>}
+                  {Number(r.delivery_eur || 0) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Delivery €</span><br /><strong>€ {Number(r.delivery_eur).toFixed(2)}</strong></div>}
+                  {Number(r.egp_pos) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>POS</span><br /><strong>{Number(r.egp_pos).toFixed(0)} LE</strong></div>}
+                  {Number(r.egp_contanti) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti LE</span><br /><strong>{Number(r.egp_contanti).toFixed(0)} LE</strong></div>}
+                  {Number(r.delivery_egp || 0) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Delivery LE</span><br /><strong>{Number(r.delivery_egp).toFixed(0)} LE</strong></div>}
+                  {Number(r.usd_contanti) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti $</span><br /><strong>$ {Number(r.usd_contanti).toFixed(2)}</strong></div>}
+                  {r.numero_persone > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Persone</span><br /><strong>{r.numero_persone}</strong></div>}
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>Inserito da</span><br /><span style={{ color: 'var(--inchiostro-soft)' }}>{r.profiles?.nome || '—'}</span></div>
+                </div>
+
+                {/* Azioni Master */}
+                {isMaster && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--linea)' }}>
+                    <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => apriModificaRiga(r)}>Modifica</button>
+                    <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaRiga(r.id)}>Elimina</button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
