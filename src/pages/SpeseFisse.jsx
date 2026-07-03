@@ -207,43 +207,52 @@ export default function SpeseFisse() {
                   const pagato = !!pagamentiMap[v.id]
                   const inRitardo = !pagato && oggiGiorno > v.giorno_scadenza
                   return (
-                    <div key={v.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>{v.nome}</div>
-                        <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>
-                          {simboloValuta[v.valuta]} {Number(v.importo).toFixed(2)} — scadenza il {v.giorno_scadenza} di ogni mese
-                          {v.note && ` · ${v.note}`}
+                    <div key={v.id} className="card" style={{ padding: '14px' }}>
+                      {/* Riga info */}
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>{v.nome}</div>
+                          {pagato ? (
+                            <span className="tag" style={{ background: 'rgba(47,158,104,0.15)', color: 'var(--smeraldo)', flexShrink: 0 }}>
+                              ✓ Pagato
+                            </span>
+                          ) : (
+                            <span className="tag" style={{ background: inRitardo ? 'rgba(217,104,79,0.15)' : 'var(--sabbia-chiara)', color: inRitardo ? 'var(--corallo)' : 'var(--notte)', flexShrink: 0 }}>
+                              {inRitardo ? '⚠ In ritardo' : 'Da pagare'}
+                            </span>
+                          )}
                         </div>
+                        <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginTop: 4 }}>
+                          {simboloValuta[v.valuta]} {Number(v.importo).toFixed(2)} · scadenza il {v.giorno_scadenza} del mese
+                        </div>
+                        {pagato && (
+                          <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
+                            Pagato il {new Date(pagamentiMap[v.id].data_pagamento).toLocaleDateString('it-IT')}
+                          </div>
+                        )}
+                        {v.note && <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>{v.note}</div>}
                       </div>
 
-                      {pagato ? (
-                        <>
-                          <span className="tag" style={{ background: 'rgba(47,158,104,0.15)', color: 'var(--smeraldo)' }}>
-                            Pagato il {new Date(pagamentiMap[v.id].data_pagamento).toLocaleDateString('it-IT')}
-                          </span>
-                          {isMaster && (
-                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => annullaPagamento(v, pagamentiMap[v.id])}>
+                      {/* Riga azioni */}
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--linea)', paddingTop: 10 }}>
+                        {pagato ? (
+                          isMaster && (
+                            <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto', color: 'var(--corallo)' }} onClick={() => annullaPagamento(v, pagamentiMap[v.id])}>
                               Annulla pagamento
                             </button>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <span className="tag" style={{ background: inRitardo ? 'rgba(217,104,79,0.15)' : 'var(--sabbia-chiara)', color: inRitardo ? 'var(--corallo)' : 'var(--notte)' }}>
-                            {inRitardo ? 'In ritardo' : 'Da pagare'}
-                          </span>
-                          <button className="btn btn-accent btn-sm" onClick={() => segnaPagato(v)}>
+                          )
+                        ) : (
+                          <button className="btn btn-accent btn-sm" style={{ flex: '1 1 auto' }} onClick={() => segnaPagato(v)}>
                             Segna pagato
                           </button>
-                        </>
-                      )}
-
-                      {isMaster && (
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-ghost btn-sm" onClick={() => apriModifica(v)}>Modifica</button>
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaVoce(v.id)}>Elimina</button>
-                        </div>
-                      )}
+                        )}
+                        {isMaster && (
+                          <>
+                            <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto' }} onClick={() => apriModifica(v)}>Modifica</button>
+                            <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto', color: 'var(--corallo)' }} onClick={() => eliminaVoce(v.id)}>Elimina</button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )
                 })}

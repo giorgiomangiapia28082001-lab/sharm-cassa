@@ -328,99 +328,48 @@ export default function Dipendenti() {
             const aperto = dipendenteAperto === d.id
 
             return (
-              <div key={d.id} className="card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div key={d.id} className="card" style={{ padding: '14px' }}>
+
+                {/* Riga 1: foto + nome + pill presenze */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                   {d.foto_url ? (
-                    <img
-                      src={d.foto_url}
-                      alt={d.nome}
-                      className="photo-thumb"
-                      onError={(e) => {
-                        e.target.style.display = 'none'
-                        e.target.nextSibling.style.display = 'flex'
-                      }}
-                    />
+                    <img src={d.foto_url} alt={d.nome} className="photo-thumb"
+                      onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }} />
                   ) : null}
-                  <div
-                    className="photo-thumb"
-                    style={{
-                      display: d.foto_url ? 'none' : 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: 'var(--sabbia-chiara)',
-                      color: 'var(--notte)',
-                      fontWeight: 700
-                    }}
-                  >
+                  <div className="photo-thumb" style={{ display: d.foto_url ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--sabbia-chiara)', color: 'var(--notte)', fontWeight: 700, flexShrink: 0 }}>
                     {d.nome.charAt(0)}
                   </div>
-
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15.5 }}>{d.nome}</div>
-                    <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>{d.ruolo_lavoro || '—'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{d.nome}</div>
+                    <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)' }}>{d.ruolo_lavoro || '—'}</div>
                   </div>
-
-                  {/* Pulsanti presenze — solo per dipendenti attivi */}
+                  {/* Pill presenze — solo attivi, sempre visibili a destra */}
                   {d.attivo && (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button
-                        className={`attendance-pill ${stato === 'presente' ? 'presente' : 'vuoto'}`}
-                        onClick={() => segnaPresenza(d.id, 'presente', d.nome)}
-                        disabled={!puoSegnare}
-                        title="Presente"
-                      >P</button>
-                      <button
-                        className={`attendance-pill ${stato === 'parziale' ? 'parziale' : 'vuoto'}`}
-                        onClick={() => segnaPresenza(d.id, 'parziale', d.nome)}
-                        disabled={!puoSegnare}
-                        title="Parziale"
-                      >½</button>
-                      <button
-                        className={`attendance-pill ${stato === 'assente' ? 'assente' : 'vuoto'}`}
-                        onClick={() => segnaPresenza(d.id, 'assente', d.nome)}
-                        disabled={!puoSegnare}
-                        title="Assente"
-                      >A</button>
+                    <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                      <button className={`attendance-pill ${stato === 'presente' ? 'presente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'presente', d.nome)} disabled={!puoSegnare} title="Presente">P</button>
+                      <button className={`attendance-pill ${stato === 'parziale' ? 'parziale' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'parziale', d.nome)} disabled={!puoSegnare} title="Parziale">½</button>
+                      <button className={`attendance-pill ${stato === 'assente' ? 'assente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'assente', d.nome)} disabled={!puoSegnare} title="Assente">A</button>
                     </div>
                   )}
+                </div>
 
-                  {/* Azioni Master nella riga principale */}
-                  {isMaster && d.attivo && (
-                    <button className="btn btn-ghost btn-sm" onClick={() => apriModifica(d)}>
-                      Modifica
-                    </button>
-                  )}
-                  {isMaster && d.attivo && (
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ color: 'var(--corallo)' }}
-                      onClick={() => terminaRapporto(d)}
-                    >
-                      Termina
-                    </button>
-                  )}
-                  {isMaster && !d.attivo && (
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ color: 'var(--smeraldo)' }}
-                      onClick={() => riassumi(d)}
-                    >
-                      ↩ Riassumi
-                    </button>
-                  )}
-                  {isMaster && !d.attivo && (
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ color: 'var(--corallo)' }}
-                      onClick={() => eliminaDipendente(d)}
-                    >
-                      Elimina
-                    </button>
-                  )}
-
-                  <button className="btn btn-ghost btn-sm" onClick={() => setDipendenteAperto(aperto ? null : d.id)}>
-                    {aperto ? 'Chiudi' : 'Dettagli'}
+                {/* Riga 2: azioni Master + Dettagli */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--linea)', paddingTop: 10 }}>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto' }} onClick={() => setDipendenteAperto(aperto ? null : d.id)}>
+                    {aperto ? '▲ Chiudi' : '▼ Dettagli'}
                   </button>
+                  {isMaster && d.attivo && (
+                    <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto' }} onClick={() => apriModifica(d)}>Modifica</button>
+                  )}
+                  {isMaster && d.attivo && (
+                    <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto', color: 'var(--corallo)' }} onClick={() => terminaRapporto(d)}>Termina</button>
+                  )}
+                  {isMaster && !d.attivo && (
+                    <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto', color: 'var(--smeraldo)' }} onClick={() => riassumi(d)}>↩ Riassumi</button>
+                  )}
+                  {isMaster && !d.attivo && (
+                    <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto', color: 'var(--corallo)' }} onClick={() => eliminaDipendente(d)}>Elimina</button>
+                  )}
                 </div>
 
                 {isMaster && editandoDipendente === d.id && (
