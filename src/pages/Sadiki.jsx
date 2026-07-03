@@ -199,40 +199,33 @@ export default function Sadiki() {
   }, {})
   const dateOrdinate = Object.keys(prodPerData).sort((a, b) => b.localeCompare(a))
 
-  // ──────────────────────────────────────────────
-  // Render
-  // ──────────────────────────────────────────────
   return (
     <div>
       {/* ── Header ── */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Sadiki</h1>
-          <p className="page-subtitle">Vendita prodotti al kg/pezzi — produzioni giornaliere e pagamenti ricevuti.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {puoInserire && (
-            <>
-              <button className="btn btn-primary" onClick={() => { setMostraFormProd((v) => !v); setEditandoProdId(null); setFormProd(VUOTO_PROD) }}>
-                {mostraFormProd && !editandoProdId ? '✕ Chiudi' : '+ Nuova produzione'}
-              </button>
-              <button className="btn btn-accent" onClick={() => setMostraFormPag((v) => !v)}>
-                {mostraFormPag ? '✕ Chiudi' : '€ Registra pagamento'}
-              </button>
-            </>
-          )}
+          <p className="page-subtitle">Vendita prodotti al kg/pezzi — produzioni e pagamenti ricevuti.</p>
         </div>
       </div>
 
+      {/* ── Pulsanti azione ── */}
+      {puoInserire && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
+          <button className="btn btn-primary" style={{ flex: '1 1 auto' }} onClick={() => { setMostraFormProd((v) => !v); setEditandoProdId(null); setFormProd(VUOTO_PROD) }}>
+            {mostraFormProd && !editandoProdId ? '✕ Chiudi' : '+ Nuova produzione'}
+          </button>
+          <button className="btn btn-accent" style={{ flex: '1 1 auto' }} onClick={() => setMostraFormPag((v) => !v)}>
+            {mostraFormPag ? '✕ Chiudi' : '€ Registra pagamento'}
+          </button>
+        </div>
+      )}
+
       {/* ── Selezione cliente (se più di uno) ── */}
       {clienti.length > 1 && (
-        <div style={{ marginBottom: 20, display: 'flex', gap: 8 }}>
+        <div style={{ marginBottom: 20, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {clienti.map((c) => (
-            <button
-              key={c.id}
-              className={`btn ${clienteId === c.id ? 'btn-accent' : 'btn-ghost'}`}
-              onClick={() => setClienteId(c.id)}
-            >
+            <button key={c.id} className={`btn ${clienteId === c.id ? 'btn-accent' : 'btn-ghost'}`} onClick={() => setClienteId(c.id)}>
               {c.nome}
             </button>
           ))}
@@ -240,38 +233,40 @@ export default function Sadiki() {
       )}
 
       {/* ── Filtro date ── */}
-      <div className="card" style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-        <div className="field" style={{ margin: 0 }}>
-          <label>Dal</label>
-          <input type="date" value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} />
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="field" style={{ margin: 0, flex: '1 1 120px' }}>
+            <label>Dal</label>
+            <input type="date" value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} />
+          </div>
+          <div className="field" style={{ margin: 0, flex: '1 1 120px' }}>
+            <label>Al</label>
+            <input type="date" value={dataFine} onChange={(e) => setDataFine(e.target.value)} />
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => { setDataInizio(inizioMese()); setDataFine(oggi()) }}>
+            Mese corrente
+          </button>
         </div>
-        <div className="field" style={{ margin: 0 }}>
-          <label>Al</label>
-          <input type="date" value={dataFine} onChange={(e) => setDataFine(e.target.value)} />
-        </div>
-        <button className="btn btn-ghost btn-sm" onClick={() => { setDataInizio(inizioMese()); setDataFine(oggi()) }}>
-          Mese corrente
-        </button>
       </div>
 
       {/* ── Riepilogo saldo ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 28 }}>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Totale consegnato</div>
-          <div style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--notte)' }}>€ {fmt(totaleDebito)}</div>
-          <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>{produzioni.length} produzioni · {fmtKg(produzioni.reduce((a, p) => a + Number(p.kg), 0))} kg/pz tot.</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 28 }}>
+        <div className="card" style={{ textAlign: 'center', padding: '14px 12px' }}>
+          <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Totale consegnato</div>
+          <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--notte)' }}>€ {fmt(totaleDebito)}</div>
+          <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginTop: 2 }}>{produzioni.length} prod. · {fmtKg(produzioni.reduce((a, p) => a + Number(p.kg), 0))} kg/pz</div>
         </div>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Già pagato</div>
-          <div style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--smeraldo)' }}>€ {fmt(totalePagato)}</div>
-          <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>{pagamenti.length} pagamento/i ricevuto/i</div>
+        <div className="card" style={{ textAlign: 'center', padding: '14px 12px' }}>
+          <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Già pagato</div>
+          <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--smeraldo)' }}>€ {fmt(totalePagato)}</div>
+          <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginTop: 2 }}>{pagamenti.length} pagamento/i</div>
         </div>
-        <div className="card" style={{ textAlign: 'center', background: saldoAperto > 0.01 ? 'rgba(217,104,79,0.08)' : 'rgba(47,158,104,0.08)' }}>
-          <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Saldo aperto</div>
-          <div style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)', color: saldoAperto > 0.01 ? 'var(--corallo)' : 'var(--smeraldo)' }}>
+        <div className="card" style={{ textAlign: 'center', padding: '14px 12px', background: saldoAperto > 0.01 ? 'rgba(217,104,79,0.08)' : 'rgba(47,158,104,0.08)' }}>
+          <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Saldo aperto</div>
+          <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', color: saldoAperto > 0.01 ? 'var(--corallo)' : 'var(--smeraldo)' }}>
             € {fmt(Math.abs(saldoAperto))}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
             {saldoAperto > 0.01 ? 'Da incassare' : saldoAperto < -0.01 ? 'Pagato in eccesso' : 'Tutto pagato ✓'}
           </div>
         </div>
@@ -373,9 +368,9 @@ export default function Sadiki() {
           <p>{puoInserire ? 'Usa il pulsante in alto per registrare la prima produzione.' : 'Nessun dato inserito per questo periodo.'}</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 24, alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
-          {/* ── Colonna sinistra: produzioni per data ── */}
+          {/* ── Produzioni per data ── */}
           <div>
             <h2 style={{ fontSize: 16, marginBottom: 16, color: 'var(--notte)' }}>Produzioni</h2>
             {dateOrdinate.length === 0 ? (
@@ -388,7 +383,7 @@ export default function Sadiki() {
                 return (
                   <div key={data} style={{ marginBottom: 18 }}>
                     {/* intestazione giorno */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, flexWrap: 'wrap', gap: 4 }}>
                       <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--notte)' }}>
                         {new Date(data + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
                       </div>
@@ -399,28 +394,30 @@ export default function Sadiki() {
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {righe.map((p) => (
-                        <div key={p.id} className="card" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px' }}>
-                          {p.foto_url && (
-                            <a href={p.foto_url} target="_blank" rel="noreferrer">
-                              <img src={p.foto_url} alt="foto" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
-                            </a>
-                          )}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{p.prodotto}</div>
-                            <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
-                              {fmtKg(p.kg)} kg/pz × € {fmt(p.prezzo_kg_eur)} cad.
-                            </div>
-                            {p.note && <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 3 }}>{p.note}</div>}
-                          </div>
-                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--notte)' }}>€ {fmt(Number(p.kg) * Number(p.prezzo_kg_eur))}</div>
-                            {isMaster && (
-                              <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
-                                <button className="btn btn-ghost btn-sm" onClick={() => apriModificaProd(p)}>Modifica</button>
-                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaProduzione(p.id)}>Elimina</button>
-                              </div>
+                        <div key={p.id} className="card" style={{ padding: '12px 14px' }}>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                            {p.foto_url && (
+                              <a href={p.foto_url} target="_blank" rel="noreferrer" style={{ flexShrink: 0 }}>
+                                <img src={p.foto_url} alt="foto" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6 }} />
+                              </a>
                             )}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{p.prodotto}</div>
+                              <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
+                                {fmtKg(p.kg)} kg/pz × € {fmt(p.prezzo_kg_eur)} cad.
+                              </div>
+                              {p.note && <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 3 }}>{p.note}</div>}
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--notte)' }}>€ {fmt(Number(p.kg) * Number(p.prezzo_kg_eur))}</div>
+                            </div>
                           </div>
+                          {isMaster && (
+                            <div style={{ display: 'flex', gap: 6, marginTop: 10, justifyContent: 'flex-end', borderTop: '1px solid var(--linea)', paddingTop: 8 }}>
+                              <button className="btn btn-ghost btn-sm" onClick={() => apriModificaProd(p)}>Modifica</button>
+                              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaProduzione(p.id)}>Elimina</button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -430,7 +427,7 @@ export default function Sadiki() {
             )}
           </div>
 
-          {/* ── Colonna destra: pagamenti ricevuti ── */}
+          {/* ── Pagamenti ricevuti ── */}
           <div>
             <h2 style={{ fontSize: 16, marginBottom: 16, color: 'var(--notte)' }}>Pagamenti ricevuti</h2>
             {pagamenti.length === 0 ? (
@@ -439,8 +436,8 @@ export default function Sadiki() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {pagamenti.map((p) => (
                   <div key={p.id} className="card" style={{ borderLeft: '3px solid var(--smeraldo)', padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--smeraldo)' }}>€ {fmt(p.importo_eur)}</div>
                         <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 3 }}>
                           {new Date(p.data_pagamento + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -455,7 +452,7 @@ export default function Sadiki() {
                         {p.note && <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 3 }}>{p.note}</div>}
                       </div>
                       {isMaster && (
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)', marginLeft: 8 }} onClick={() => eliminaPagamento(p.id)}>
+                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)', flexShrink: 0 }} onClick={() => eliminaPagamento(p.id)}>
                           Elimina
                         </button>
                       )}
@@ -465,6 +462,7 @@ export default function Sadiki() {
               </div>
             )}
           </div>
+
         </div>
       )}
     </div>
