@@ -237,7 +237,7 @@ export default function Incassi() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {righe.map((r) => {
-            const totEur = Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici) + Number(r.delivery_eur || 0)
+            const totEur = Number(r.eur_contanti) + Number(r.bonifici) + Number(r.delivery_eur || 0)
             return (
               <div key={r.id} className="card" style={{ padding: '14px' }}>
                 {/* Riga principale: data + totale EUR */}

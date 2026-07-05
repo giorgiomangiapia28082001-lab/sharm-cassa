@@ -107,7 +107,7 @@ export default function Riepilogo() {
   useEffect(() => { carica(); caricaSpeseFisse() }, [dataInizio, dataFine])
 
   // Totali per valuta — incassi di sala
-  const totIncassiEur = incassi.reduce((a, r) => a + Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici), 0)
+  const totIncassiEur = incassi.reduce((a, r) => a + Number(r.eur_contanti) + Number(r.bonifici), 0)
   const totIncassiUsd = incassi.reduce((a, r) => a + Number(r.usd_contanti), 0)
   const totIncassiEgp = incassi.reduce((a, r) => a + Number(r.egp_pos) + Number(r.egp_contanti), 0)
 
@@ -132,7 +132,7 @@ export default function Riepilogo() {
   const giorniMap = {}
   incassi.forEach((r) => {
     const giorno = r.data
-    const valoreEur = Number(r.eur_contanti) + Number(r.fondo_cassa) + Number(r.bonifici) + Number(r.delivery_eur || 0)
+    const valoreEur = Number(r.eur_contanti) + Number(r.bonifici) + Number(r.delivery_eur || 0)
       + Number(r.usd_contanti) / eurUsdRate
       + (Number(r.egp_pos) + Number(r.egp_contanti) + Number(r.delivery_egp || 0)) / eurEgpRate
     giorniMap[giorno] = giorniMap[giorno] || { data: giorno, incassi: 0, uscite: 0 }
