@@ -107,7 +107,17 @@ export default function Riepilogo() {
   useEffect(() => { carica(); caricaSpeseFisse() }, [dataInizio, dataFine])
 
   // Totali per valuta — incassi di sala
-  const totIncassiEur = incassi.reduce((a, r) => a + Number(r.eur_contanti) + Number(r.bonifici), 0)
+  // Formula fondo cassa: i contanti inseriti includono il fondo del giorno prima.
+  // Incasso reale = eur_contanti + bonifici - fondo_cassa_ieri + fondo_cassa_oggi
+  // Cioè: per ogni giorno, sommiamo (eur_contanti + bonifici + fondo_cassa)
+  // e sottraiamo il fondo_cassa del giorno PRECEDENTE (che era già incluso nei contanti).
+  // Ordiniamo per data per trovare il giorno precedente.
+  const incassiOrdinati = [...incassi].sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const totIncassiEur = incassiOrdinati.reduce((acc, r, i) => {
+    const fondoIeri = i > 0 ? Number(incassiOrdinati[i - 1].fondo_cassa) : 0
+    const incassoReale = Number(r.eur_contanti) + Number(r.bonifici) - fondoIeri + Number(r.fondo_cassa)
+    return acc + incassoReale
+  }, 0)
   const totIncassiUsd = incassi.reduce((a, r) => a + Number(r.usd_contanti), 0)
   const totIncassiEgp = incassi.reduce((a, r) => a + Number(r.egp_pos) + Number(r.egp_contanti), 0)
 
@@ -130,9 +140,11 @@ export default function Riepilogo() {
 
   // Serie giornaliera per il grafico
   const giorniMap = {}
-  incassi.forEach((r) => {
+  incassiOrdinati.forEach((r, i) => {
     const giorno = r.data
-    const valoreEur = Number(r.eur_contanti) + Number(r.bonifici) + Number(r.delivery_eur || 0)
+    const fondoIeri = i > 0 ? Number(incassiOrdinati[i - 1].fondo_cassa) : 0
+    const incassoEurReale = Number(r.eur_contanti) + Number(r.bonifici) - fondoIeri + Number(r.fondo_cassa)
+    const valoreEur = incassoEurReale + Number(r.delivery_eur || 0)
       + Number(r.usd_contanti) / eurUsdRate
       + (Number(r.egp_pos) + Number(r.egp_contanti) + Number(r.delivery_egp || 0)) / eurEgpRate
     giorniMap[giorno] = giorniMap[giorno] || { data: giorno, incassi: 0, uscite: 0 }

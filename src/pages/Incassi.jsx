@@ -237,7 +237,7 @@ export default function Incassi() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[...righe].sort((a, b) => a.data.localeCompare(b.data)).map((r, i, arr) => ({
+          {[...righe].sort((a, b) => a.created_at.localeCompare(b.created_at)).map((r, i, arr) => ({
             r, i, arr,
             fondoIeri: i > 0 ? Number(arr[i - 1].fondo_cassa) : 0,
           })).reverse().map(({ r, fondoIeri }) => {
