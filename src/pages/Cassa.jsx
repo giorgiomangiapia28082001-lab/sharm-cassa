@@ -26,6 +26,7 @@ export default function Cassa() {
   const [chiudendo, setChiudendo] = useState(false)
   const [mostraStorico, setMostraStorico] = useState(false)
   const [riaprendo, setRiaprendo] = useState(false)
+  const [editMovimento, setEditMovimento] = useState(null) // { id, tipo, importo_pos, importo_da, importo_a, valuta_da, valuta_a, note, data }
 
   async function carica() {
     setLoading(true)
@@ -93,6 +94,24 @@ export default function Cassa() {
     if (!confirm('Eliminare questo movimento? Il saldo verrà ricalcolato.')) return
     const { error } = await supabase.from('movimenti_cassa').delete().eq('id', m.id)
     if (!error) carica()
+  }
+
+  async function salvaModificaMovimento(e) {
+    e.preventDefault()
+    const payload = {}
+    if (editMovimento.tipo === 'prelievo_pos') {
+      payload.importo_pos = Number(editMovimento.importo_pos)
+      payload.note = editMovimento.note || null
+      payload.data = editMovimento.data
+    } else if (editMovimento.tipo === 'cambio_valuta') {
+      payload.importo_da = Number(editMovimento.importo_da)
+      payload.importo_a = Number(editMovimento.importo_a)
+      payload.note = editMovimento.note || null
+      payload.data = editMovimento.data
+    }
+    const { error } = await supabase.from('movimenti_cassa').update(payload).eq('id', editMovimento.id)
+    if (!error) { setEditMovimento(null); carica() }
+    else alert('Errore: ' + error.message)
   }
 
   async function chiudiPeriodo() {
@@ -367,11 +386,63 @@ export default function Cassa() {
                   <td style={{ color: 'var(--inchiostro-soft)' }}>{m.note || '—'}</td>
                   <td style={{ color: 'var(--inchiostro-soft)' }}>{m.profiles?.nome || '—'}</td>
                   {isMaster && (
-                    <td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {m.tipo !== 'incasso_b2b' && (
+                        <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => setEditMovimento({
+                          id: m.id,
+                          tipo: m.tipo,
+                          data: m.data,
+                          importo_pos: m.importo_pos || '',
+                          importo_da: m.importo_da || '',
+                          importo_a: m.importo_a || '',
+                          valuta_da: m.valuta_da || '',
+                          valuta_a: m.valuta_a || '',
+                          note: m.note || '',
+                        })}>Modifica</button>
+                      )}
                       <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaMovimento(m)}>Elimina</button>
                     </td>
                   )}
                 </tr>
+                {/* Form modifica inline */}
+                {isMaster && editMovimento?.id === m.id && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '12px 14px', background: 'var(--sabbia-chiara)' }}>
+                      <form onSubmit={salvaModificaMovimento}>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                          <div className="field" style={{ margin: 0 }}>
+                            <label>Data</label>
+                            <input type="date" value={editMovimento.data} onChange={(e) => setEditMovimento((f) => ({ ...f, data: e.target.value }))} required />
+                          </div>
+                          {editMovimento.tipo === 'prelievo_pos' && (
+                            <div className="field" style={{ margin: 0 }}>
+                              <label>Importo LE</label>
+                              <input type="number" step="0.01" value={editMovimento.importo_pos} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_pos: e.target.value }))} required />
+                            </div>
+                          )}
+                          {editMovimento.tipo === 'cambio_valuta' && (
+                            <>
+                              <div className="field" style={{ margin: 0 }}>
+                                <label>Da ({editMovimento.valuta_da})</label>
+                                <input type="number" step="0.01" value={editMovimento.importo_da} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_da: e.target.value }))} required />
+                              </div>
+                              <div className="field" style={{ margin: 0 }}>
+                                <label>A ({editMovimento.valuta_a})</label>
+                                <input type="number" step="0.01" value={editMovimento.importo_a} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_a: e.target.value }))} required />
+                              </div>
+                            </>
+                          )}
+                          <div className="field" style={{ margin: 0 }}>
+                            <label>Note</label>
+                            <input type="text" value={editMovimento.note} onChange={(e) => setEditMovimento((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
+                          </div>
+                          <button type="submit" className="btn btn-accent btn-sm">Salva</button>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditMovimento(null)}>Annulla</button>
+                        </div>
+                      </form>
+                    </td>
+                  </tr>
+                )}
               ))}
             </tbody>
           </table>
