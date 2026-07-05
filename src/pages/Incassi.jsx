@@ -237,10 +237,12 @@ export default function Incassi() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[...righe].sort((a, b) => a.data.localeCompare(b.data)).map((r, i, arr) => {
+          {[...righe].sort((a, b) => a.data.localeCompare(b.data)).map((r, i, arr) => ({
+            r, i, arr,
+            fondoIeri: i > 0 ? Number(arr[i - 1].fondo_cassa) : 0,
+          })).reverse().map(({ r, fondoIeri }) => {
             const eurUsdRate = Number(tassi.eur_usd) || 1
             const eurEgpRate = Number(tassi.eur_egp) || 1
-            const fondoIeri = i > 0 ? Number(arr[i - 1].fondo_cassa) : 0
 
             // Totali per valuta
             const totEUR = Number(r.eur_contanti) + Number(r.bonifici) + Number(r.delivery_eur || 0) - fondoIeri + Number(r.fondo_cassa)
