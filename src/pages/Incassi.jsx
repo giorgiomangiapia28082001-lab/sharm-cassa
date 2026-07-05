@@ -28,15 +28,16 @@ export default function Incassi() {
   const [salvando, setSalvando] = useState(false)
   const [mostraForm, setMostraForm] = useState(!isViewer)
   const [editandoId, setEditandoId] = useState(null)
+  const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 55 })
 
   async function carica() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('incassi')
-      .select('*, profiles:inserito_da(nome)')
-      .order('data', { ascending: false })
-      .limit(60)
+    const [{ data, error }, { data: t }] = await Promise.all([
+      supabase.from('incassi').select('*, profiles:inserito_da(nome)').order('data', { ascending: false }).limit(60),
+      supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1),
+    ])
     if (!error) setRighe(data)
+    if (t && t.length) setTassi(t[0])
     setLoading(false)
   }
 
@@ -236,26 +237,66 @@ export default function Incassi() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {righe.map((r) => {
-            const totEur = Number(r.eur_contanti) + Number(r.bonifici) + Number(r.delivery_eur || 0)
+          {[...righe].sort((a, b) => a.data.localeCompare(b.data)).map((r, i, arr) => {
+            const eurUsdRate = Number(tassi.eur_usd) || 1
+            const eurEgpRate = Number(tassi.eur_egp) || 1
+            const fondoIeri = i > 0 ? Number(arr[i - 1].fondo_cassa) : 0
+
+            // Totali per valuta
+            const totEUR = Number(r.eur_contanti) + Number(r.bonifici) + Number(r.delivery_eur || 0) - fondoIeri + Number(r.fondo_cassa)
+            const totEGP = Number(r.egp_pos) + Number(r.egp_contanti) + Number(r.delivery_egp || 0)
+            const totUSD = Number(r.usd_contanti)
+
+            // Totale tutto convertito in EUR
+            const totaleEur = totEUR + (totEGP / eurEgpRate) + (totUSD / eurUsdRate)
+
             return (
               <div key={r.id} className="card" style={{ padding: '14px' }}>
-                {/* Riga principale: data + totale EUR */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+
+                {/* Header: data a sinistra, totale EUR a destra */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>
                     {new Date(r.data).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
                   </div>
-                  <div style={{ fontWeight: 700, color: 'var(--smeraldo)', fontSize: 15 }}>
-                    € {totEur.toFixed(2)}
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 800, color: 'var(--smeraldo)', fontSize: 17 }}>
+                      € {totaleEur.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)' }}>totale convertito</div>
                   </div>
                 </div>
 
-                {/* Griglia valori */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '6px 12px', fontSize: 13 }}>
+                {/* Subtotali per valuta */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {totEUR !== 0 && (
+                    <div style={{ flex: '1 1 120px', background: 'var(--sabbia-chiara)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Totale EUR</div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>€ {totEUR.toFixed(2)}</div>
+                    </div>
+                  )}
+                  {totEGP > 0 && (
+                    <div style={{ flex: '1 1 120px', background: 'var(--sabbia-chiara)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Totale LE</div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{totEGP.toFixed(0)} LE</div>
+                      <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)' }}>≈ € {(totEGP / eurEgpRate).toFixed(2)}</div>
+                    </div>
+                  )}
+                  {totUSD > 0 && (
+                    <div style={{ flex: '1 1 120px', background: 'var(--sabbia-chiara)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Totale USD</div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>$ {totUSD.toFixed(2)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)' }}>≈ € {(totUSD / eurUsdRate).toFixed(2)}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Dettaglio voci */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '6px 12px', fontSize: 12, borderTop: '1px solid var(--linea)', paddingTop: 10 }}>
                   {Number(r.eur_contanti) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti €</span><br /><strong>€ {Number(r.eur_contanti).toFixed(2)}</strong></div>}
-                  {Number(r.fondo_cassa) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Fondo cassa</span><br /><strong>€ {Number(r.fondo_cassa).toFixed(2)}</strong></div>}
                   {Number(r.bonifici) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Bonifici</span><br /><strong>€ {Number(r.bonifici).toFixed(2)}</strong></div>}
                   {Number(r.delivery_eur || 0) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Delivery €</span><br /><strong>€ {Number(r.delivery_eur).toFixed(2)}</strong></div>}
+                  {fondoIeri > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>- Fondo ieri</span><br /><strong style={{ color: 'var(--corallo)' }}>- € {fondoIeri.toFixed(2)}</strong></div>}
+                  {Number(r.fondo_cassa) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>+ Fondo oggi</span><br /><strong>€ {Number(r.fondo_cassa).toFixed(2)}</strong></div>}
                   {Number(r.egp_pos) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>POS</span><br /><strong>{Number(r.egp_pos).toFixed(0)} LE</strong></div>}
                   {Number(r.egp_contanti) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti LE</span><br /><strong>{Number(r.egp_contanti).toFixed(0)} LE</strong></div>}
                   {Number(r.delivery_egp || 0) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Delivery LE</span><br /><strong>{Number(r.delivery_egp).toFixed(0)} LE</strong></div>}
