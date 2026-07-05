@@ -19,6 +19,7 @@ export default function Riepilogo() {
   const [dataFine, setDataFine] = useState(oggi())
   const [speseFisseNonPagate, setSpeseFisseNonPagate] = useState([])
   const [targetData, setTargetData] = useState(null)
+  const [movimentiCambio, setMovimentiCambio] = useState([])
 
   async function caricaSpeseFisse() {
     const mese = primoGiornoMese()
@@ -91,13 +92,15 @@ export default function Riepilogo() {
 
   async function carica() {
     setLoading(true)
-    const [{ data: inc }, { data: usc }, { data: t }] = await Promise.all([
+    const [{ data: inc }, { data: usc }, { data: t }, { data: mov }] = await Promise.all([
       supabase.from('incassi').select('*').gte('data', dataInizio).lte('data', dataFine).order('data'),
       supabase.from('uscite').select('*').gte('data', dataInizio).lte('data', dataFine),
       supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1),
+      supabase.from('movimenti_cassa').select('*').eq('tipo', 'cambio_valuta').gte('data', dataInizio).lte('data', dataFine).order('data'),
     ])
     setIncassi(inc || [])
     setUscite(usc || [])
+    setMovimentiCambio(mov || [])
     const t0 = t && t.length ? t[0] : { eur_usd: 1.08, eur_egp: 60 }
     if (t && t.length) setTassi(t0)
     setLoading(false)
@@ -316,7 +319,7 @@ export default function Riepilogo() {
           </div>
 
           <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Dettaglio per valuta</h3>
-          <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+          <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: 16 }}>
             <table>
               <thead>
                 <tr>
@@ -352,6 +355,50 @@ export default function Riepilogo() {
               </tbody>
             </table>
           </div>
+
+          {/* ── CAMBI VALUTA del periodo ── */}
+          {movimentiCambio.length > 0 && (() => {
+            const SIMBOLI = { EUR: '€', EGP: 'LE', USD: '$' }
+            // Totali per valuta: quanto è uscito e quanto è entrato dai cambi
+            const cambiPerValuta = {}
+            movimentiCambio.forEach((m) => {
+              if (!cambiPerValuta[m.valuta_da]) cambiPerValuta[m.valuta_da] = { uscito: 0, entrato: 0 }
+              if (!cambiPerValuta[m.valuta_a]) cambiPerValuta[m.valuta_a] = { uscito: 0, entrato: 0 }
+              cambiPerValuta[m.valuta_da].uscito += Number(m.importo_da)
+              cambiPerValuta[m.valuta_a].entrato += Number(m.importo_a)
+            })
+            return (
+              <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--notte)' }}>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>🔄 Cambi valuta nel periodo</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                  {movimentiCambio.map((m) => (
+                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <span style={{ color: 'var(--inchiostro-soft)', minWidth: 70 }}>
+                        {new Date(m.data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+                      </span>
+                      <span style={{ color: 'var(--corallo)', fontWeight: 600 }}>
+                        - {SIMBOLI[m.valuta_da]} {Number(m.importo_da).toFixed(2)} {m.valuta_da}
+                      </span>
+                      <span style={{ color: 'var(--inchiostro-soft)' }}>→</span>
+                      <span style={{ color: 'var(--smeraldo)', fontWeight: 600 }}>
+                        + {SIMBOLI[m.valuta_a]} {Number(m.importo_a).toFixed(2)} {m.valuta_a}
+                      </span>
+                      {m.note && <span style={{ color: 'var(--inchiostro-soft)', fontSize: 11 }}>· {m.note}</span>}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ borderTop: '1px solid var(--linea)', paddingTop: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {Object.entries(cambiPerValuta).map(([valuta, v]) => (
+                    <div key={valuta} style={{ fontSize: 13 }}>
+                      <span className="tag" style={{ marginRight: 6 }}>{valuta}</span>
+                      {v.entrato > 0 && <span style={{ color: 'var(--smeraldo)', marginRight: 6 }}>+{SIMBOLI[valuta]} {v.entrato.toFixed(2)}</span>}
+                      {v.uscito > 0 && <span style={{ color: 'var(--corallo)' }}>-{SIMBOLI[valuta]} {v.uscito.toFixed(2)}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
         </>
       )}
     </div>
