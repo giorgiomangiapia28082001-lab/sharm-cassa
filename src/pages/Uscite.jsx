@@ -24,6 +24,7 @@ export default function Uscite() {
   const [salvando, setSalvando] = useState(false)
   const [mostraForm, setMostraForm] = useState(!isViewer)
   const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [filtroMetodo, setFiltroMetodo] = useState('')
   const [editandoId, setEditandoId] = useState(null)
   const [editandoGeneratoDaAcconto, setEditandoGeneratoDaAcconto] = useState(false)
 
@@ -145,9 +146,9 @@ export default function Uscite() {
   }
 
   const puoInserire = isMaster || profile?.ruolo === 'operatore'
-  const righeFiltrate = filtroCategoria
-    ? righe.filter((r) => r.categoria_id === filtroCategoria)
-    : righe
+  const righeFiltrate = righe
+    .filter((r) => !filtroCategoria || r.categoria_id === filtroCategoria)
+    .filter((r) => !filtroMetodo || (r.metodo_pagamento || 'contanti') === filtroMetodo)
 
   const simboloValuta = { EUR: '€', USD: '$', EGP: 'LE' }
 
@@ -232,8 +233,14 @@ export default function Uscite() {
         </form>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 16, color: 'var(--notte)' }}>Storico</h3>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+        <h3 style={{ fontSize: 16, color: 'var(--notte)', margin: 0, flex: '1 1 auto' }}>Storico</h3>
+        <select value={filtroMetodo} onChange={(e) => setFiltroMetodo(e.target.value)} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--linea)', background: '#fff' }}>
+          <option value="">Tutti i metodi</option>
+          <option value="contanti">Contanti</option>
+          <option value="pos">POS</option>
+          <option value="bonifico">Bonifico</option>
+        </select>
         <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--linea)', background: '#fff' }}>
           <option value="">Tutte le categorie</option>
           {categorie.map((c) => (
@@ -246,96 +253,51 @@ export default function Uscite() {
         <p className="page-subtitle">Caricamento…</p>
       ) : righeFiltrate.length === 0 ? (
         <div className="empty-state card">
-          <div className="empty-state-title">Nessuna uscita registrata</div>
-          <p>Quando inserisci la prima spesa, apparirà qui.</p>
+          <div className="empty-state-title">Nessuna uscita trovata</div>
+          <p>Nessuna uscita corrisponde ai filtri selezionati.</p>
         </div>
-      ) : (() => {
-        const contanti = righeFiltrate.filter((r) => (r.metodo_pagamento || 'contanti') !== 'pos')
-        const pos = righeFiltrate.filter((r) => r.metodo_pagamento === 'pos')
-
-        const totContantiEur = contanti.filter(r => r.valuta === 'EUR').reduce((a, r) => a + Number(r.importo), 0)
-        const totContantiEgp = contanti.filter(r => r.valuta === 'EGP').reduce((a, r) => a + Number(r.importo), 0)
-        const totContantiUsd = contanti.filter(r => r.valuta === 'USD').reduce((a, r) => a + Number(r.importo), 0)
-        const totPosEur = pos.filter(r => r.valuta === 'EUR').reduce((a, r) => a + Number(r.importo), 0)
-        const totPosEgp = pos.filter(r => r.valuta === 'EGP').reduce((a, r) => a + Number(r.importo), 0)
-        const totPosUsd = pos.filter(r => r.valuta === 'USD').reduce((a, r) => a + Number(r.importo), 0)
-
-        const RigaUscita = ({ r }) => (
-          <div key={r.id} className="card" style={{ padding: '14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>
-                  {r.descrizione || '—'}
-                  {r.generato_da_acconto_id && (
-                    <span className="tag" style={{ marginLeft: 8, background: 'var(--sabbia-chiara)', fontSize: 11 }}>acconto</span>
-                  )}
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {righeFiltrate.map((r) => (
+            <div key={r.id} className="card" style={{ padding: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>
+                    {r.descrizione || '—'}
+                    {r.generato_da_acconto_id && (
+                      <span className="tag" style={{ marginLeft: 8, background: 'var(--sabbia-chiara)', fontSize: 11 }}>acconto</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
+                    {new Date(r.data).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {' · '}{r.profiles?.nome || '—'}
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
-                  {new Date(r.data).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
-                  {' · '}{r.profiles?.nome || '—'}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--corallo)' }}>
-                  {simboloValuta[r.valuta]} {Number(r.importo).toFixed(2)}
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--corallo)' }}>
+                    {simboloValuta[r.valuta]} {Number(r.importo).toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginTop: 2, textTransform: 'capitalize' }}>
+                    {r.metodo_pagamento || 'contanti'}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span className="tag">{r.categorie_uscite?.nome}</span>
-              {r.foto_url && (
-                <a href={r.foto_url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>📎 Vedi foto</a>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="tag">{r.categorie_uscite?.nome}</span>
+                {r.foto_url && (
+                  <a href={r.foto_url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>📎 Vedi foto</a>
+                )}
+              </div>
+              {isMaster && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--linea)' }}>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => apriModificaRiga(r)}>Modifica</button>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaRiga(r)}>Elimina</button>
+                </div>
               )}
             </div>
-            {isMaster && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--linea)' }}>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => apriModificaRiga(r)}>Modifica</button>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaRiga(r)}>Elimina</button>
-              </div>
-            )}
-          </div>
-        )
-
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-            {/* ── Sezione CONTANTI ── */}
-            {contanti.length > 0 && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h4 style={{ fontSize: 15, fontWeight: 700, color: 'var(--notte)', margin: 0 }}>💵 Contanti / Bonifico</h4>
-                  <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', textAlign: 'right' }}>
-                    {totContantiEur > 0 && <span style={{ marginLeft: 10 }}>€ {totContantiEur.toFixed(2)}</span>}
-                    {totContantiEgp > 0 && <span style={{ marginLeft: 10 }}>{totContantiEgp.toFixed(0)} LE</span>}
-                    {totContantiUsd > 0 && <span style={{ marginLeft: 10 }}>$ {totContantiUsd.toFixed(2)}</span>}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {contanti.map((r) => <RigaUscita key={r.id} r={r} />)}
-                </div>
-              </div>
-            )}
-
-            {/* ── Sezione POS ── */}
-            {pos.length > 0 && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h4 style={{ fontSize: 15, fontWeight: 700, color: 'var(--notte)', margin: 0 }}>💳 POS</h4>
-                  <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', textAlign: 'right' }}>
-                    {totPosEur > 0 && <span style={{ marginLeft: 10 }}>€ {totPosEur.toFixed(2)}</span>}
-                    {totPosEgp > 0 && <span style={{ marginLeft: 10 }}>{totPosEgp.toFixed(0)} LE</span>}
-                    {totPosUsd > 0 && <span style={{ marginLeft: 10 }}>$ {totPosUsd.toFixed(2)}</span>}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {pos.map((r) => <RigaUscita key={r.id} r={r} />)}
-                </div>
-              </div>
-            )}
-
-          </div>
-        )
-      })()}
+          ))}
+        </div>
+      )}
     </div>
   )
 }
