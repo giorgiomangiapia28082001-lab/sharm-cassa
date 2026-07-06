@@ -375,34 +375,33 @@ export default function Cassa() {
 
         {/* ── Versamento in cassa ── */}
         <div className="card">
-          <h3 style={{ fontSize: 15, marginBottom: 4 }}>💰 Versamento in cassa</h3>
+          <h3 style={{ fontSize: 15, marginBottom: 4, fontFamily: 'var(--font-body)', fontWeight: 700 }}>💰 Versamento in cassa</h3>
           <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginBottom: 16 }}>
-            Aggiungi liquidità in cassa (fondo iniziale, soldi dei soci, ecc.) senza che venga contato come incasso.
+            Aggiungi liquidità (fondo iniziale, soldi dei soci, ecc.) senza contarla come incasso.
           </p>
           <form onSubmit={salvaVersamento}>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <div className="field" style={{ margin: 0, flex: '1 1 100px' }}>
-                <label>Valuta</label>
-                <select value={versamentoForm.valuta} onChange={(e) => setVersamentoForm((f) => ({ ...f, valuta: e.target.value }))}>
-                  <option value="EUR">Euro (€)</option>
-                  <option value="EGP">Lire egiziane (LE)</option>
-                  <option value="USD">Dollari ($)</option>
-                </select>
-              </div>
-              <div className="field" style={{ margin: 0, flex: '1 1 120px' }}>
-                <label>Importo</label>
-                <input type="number" step="0.01" min="0.01" value={versamentoForm.importo} onChange={(e) => setVersamentoForm((f) => ({ ...f, importo: e.target.value }))} placeholder="0.00" required />
-              </div>
-              <div className="field" style={{ margin: 0, flex: '2 1 180px' }}>
-                <label>Note (es. "Fondo cassa luglio", "Versamento Gianluigi")</label>
-                <input type="text" value={versamentoForm.note} onChange={(e) => setVersamentoForm((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
-              </div>
-              <button type="submit" className="btn btn-accent btn-sm" disabled={salvandoVersamento}>
-                {salvandoVersamento ? 'Salvataggio…' : 'Aggiungi versamento'}
-              </button>
+            <div className="field">
+              <label>Valuta</label>
+              <select value={versamentoForm.valuta} onChange={(e) => setVersamentoForm((f) => ({ ...f, valuta: e.target.value }))}>
+                <option value="EUR">Euro (€)</option>
+                <option value="EGP">Lire egiziane (LE)</option>
+                <option value="USD">Dollari ($)</option>
+              </select>
             </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Importo</label>
+              <input type="number" step="0.01" min="0.01" value={versamentoForm.importo} onChange={(e) => setVersamentoForm((f) => ({ ...f, importo: e.target.value }))} placeholder="0.00" required />
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Note (es. "Fondo cassa luglio", "Versamento Gianluigi")</label>
+              <input type="text" value={versamentoForm.note} onChange={(e) => setVersamentoForm((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
+            </div>
+            <button type="submit" className="btn btn-accent btn-sm" style={{ marginTop: 14 }} disabled={salvandoVersamento}>
+              {salvandoVersamento ? 'Salvataggio…' : 'Aggiungi versamento'}
+            </button>
           </form>
         </div>
+
       </div>
 
       <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Movimenti recenti</h3>
