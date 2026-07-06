@@ -139,6 +139,8 @@ export default function Cassa() {
       alert('Errore: ' + error.message)
     }
   }
+
+  async function chiudiPeriodo() {
     setChiudendo(true)
     const { error } = await supabase.rpc('chiudi_periodo_cassa', {
       p_note: noteChiusura || null,

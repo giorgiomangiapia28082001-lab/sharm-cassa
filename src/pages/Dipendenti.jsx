@@ -505,8 +505,6 @@ export default function Dipendenti() {
                       </p>
                     )}
 
-                    )}
-
                     {/* ── Storico acconti ── */}
                     {righeAcconti.length > 0 && (
                       <div style={{ marginTop: 20, marginBottom: 16 }}>
