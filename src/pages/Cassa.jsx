@@ -18,6 +18,8 @@ export default function Cassa() {
 
   const [cambioForm, setCambioForm] = useState({ valuta_da: 'EUR', importo_da: '', valuta_a: 'EGP', importo_a: '', note: '' })
   const [prelievoForm, setPrelievoForm] = useState({ importo_pos: '', note: '' })
+  const [versamentoForm, setVersamentoForm] = useState({ valuta: 'EUR', importo: '', note: '' })
+  const [salvandoVersamento, setSalvandoVersamento] = useState(false)
 
   const [periodoAperto, setPeriodoAperto] = useState(null)
   const [storicoPeriodi, setStoricoPeriodi] = useState([])
@@ -103,6 +105,10 @@ export default function Cassa() {
       payload.importo_pos = Number(editMovimento.importo_pos)
       payload.note = editMovimento.note || null
       payload.data = editMovimento.data
+    } else if (editMovimento.tipo === 'versamento') {
+      payload.importo_a = Number(editMovimento.importo_a)
+      payload.note = editMovimento.note || null
+      payload.data = editMovimento.data
     } else if (editMovimento.tipo === 'cambio_valuta') {
       payload.importo_da = Number(editMovimento.importo_da)
       payload.importo_a = Number(editMovimento.importo_a)
@@ -114,7 +120,25 @@ export default function Cassa() {
     else alert('Errore: ' + error.message)
   }
 
-  async function chiudiPeriodo() {
+  async function salvaVersamento(e) {
+    e.preventDefault()
+    setSalvandoVersamento(true)
+    const { error } = await supabase.from('movimenti_cassa').insert({
+      tipo: 'versamento',
+      data: oggi(),
+      valuta_a: versamentoForm.valuta,
+      importo_a: Number(versamentoForm.importo),
+      note: versamentoForm.note || null,
+      inserito_da: profile.id,
+    })
+    setSalvandoVersamento(false)
+    if (!error) {
+      setVersamentoForm({ valuta: 'EUR', importo: '', note: '' })
+      carica()
+    } else {
+      alert('Errore: ' + error.message)
+    }
+  }
     setChiudendo(true)
     const { error } = await supabase.rpc('chiudi_periodo_cassa', {
       p_note: noteChiusura || null,
@@ -348,13 +372,44 @@ export default function Cassa() {
             </button>
           </form>
         </div>
+
+        {/* ── Versamento in cassa ── */}
+        <div className="card">
+          <h3 style={{ fontSize: 15, marginBottom: 4 }}>💰 Versamento in cassa</h3>
+          <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginBottom: 16 }}>
+            Aggiungi liquidità in cassa (fondo iniziale, soldi dei soci, ecc.) senza che venga contato come incasso.
+          </p>
+          <form onSubmit={salvaVersamento}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div className="field" style={{ margin: 0, flex: '1 1 100px' }}>
+                <label>Valuta</label>
+                <select value={versamentoForm.valuta} onChange={(e) => setVersamentoForm((f) => ({ ...f, valuta: e.target.value }))}>
+                  <option value="EUR">Euro (€)</option>
+                  <option value="EGP">Lire egiziane (LE)</option>
+                  <option value="USD">Dollari ($)</option>
+                </select>
+              </div>
+              <div className="field" style={{ margin: 0, flex: '1 1 120px' }}>
+                <label>Importo</label>
+                <input type="number" step="0.01" min="0.01" value={versamentoForm.importo} onChange={(e) => setVersamentoForm((f) => ({ ...f, importo: e.target.value }))} placeholder="0.00" required />
+              </div>
+              <div className="field" style={{ margin: 0, flex: '2 1 180px' }}>
+                <label>Note (es. "Fondo cassa luglio", "Versamento Gianluigi")</label>
+                <input type="text" value={versamentoForm.note} onChange={(e) => setVersamentoForm((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
+              </div>
+              <button type="submit" className="btn btn-accent btn-sm" disabled={salvandoVersamento}>
+                {salvandoVersamento ? 'Salvataggio…' : 'Aggiungi versamento'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
 
       <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Movimenti recenti</h3>
       {movimenti.length === 0 ? (
         <div className="empty-state card">
           <div className="empty-state-title">Nessun movimento registrato</div>
-          <p>Cambi valuta e prelievi POS appariranno qui.</p>
+          <p>Cambi valuta, prelievi POS e versamenti appariranno qui.</p>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -375,12 +430,19 @@ export default function Cassa() {
                 <tr>
                   <td>{new Date(m.data).toLocaleDateString('it-IT')}</td>
                   <td>
-                    <span className="tag">{m.tipo === 'cambio_valuta' ? 'Cambio valuta' : m.tipo === 'incasso_b2b' ? 'Incasso Sadiki' : 'Prelievo POS'}</span>
+                    <span className="tag">{
+                      m.tipo === 'cambio_valuta' ? 'Cambio valuta' :
+                      m.tipo === 'incasso_b2b' ? 'Incasso Sadiki' :
+                      m.tipo === 'versamento' ? '💰 Versamento' :
+                      'Prelievo POS'
+                    }</span>
                   </td>
                   <td>
                     {m.tipo === 'cambio_valuta'
                       ? `${VALUTE[m.valuta_da]} ${Number(m.importo_da).toFixed(2)} → ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
                       : m.tipo === 'incasso_b2b'
+                      ? `+ ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
+                      : m.tipo === 'versamento'
                       ? `+ ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
                       : `${Number(m.importo_pos).toFixed(2)} LE da POS a contanti`}
                   </td>
@@ -418,6 +480,12 @@ export default function Cassa() {
                             <div className="field" style={{ margin: 0 }}>
                               <label>Importo LE</label>
                               <input type="number" step="0.01" value={editMovimento.importo_pos} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_pos: e.target.value }))} required />
+                            </div>
+                          )}
+                          {editMovimento.tipo === 'versamento' && (
+                            <div className="field" style={{ margin: 0 }}>
+                              <label>Importo ({editMovimento.valuta_a})</label>
+                              <input type="number" step="0.01" value={editMovimento.importo_a} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_a: e.target.value }))} required />
                             </div>
                           )}
                           {editMovimento.tipo === 'cambio_valuta' && (
