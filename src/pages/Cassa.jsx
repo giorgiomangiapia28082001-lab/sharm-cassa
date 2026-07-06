@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
@@ -371,7 +371,8 @@ export default function Cassa() {
             </thead>
             <tbody>
               {movimenti.map((m) => (
-                <tr key={m.id}>
+                <React.Fragment key={m.id}>
+                <tr>
                   <td>{new Date(m.data).toLocaleDateString('it-IT')}</td>
                   <td>
                     <span className="tag">{m.tipo === 'cambio_valuta' ? 'Cambio valuta' : m.tipo === 'incasso_b2b' ? 'Incasso Sadiki' : 'Prelievo POS'}</span>
@@ -404,7 +405,6 @@ export default function Cassa() {
                     </td>
                   )}
                 </tr>
-                {/* Form modifica inline */}
                 {isMaster && editMovimento?.id === m.id && (
                   <tr>
                     <td colSpan={6} style={{ padding: '12px 14px', background: 'var(--sabbia-chiara)' }}>
@@ -443,6 +443,7 @@ export default function Cassa() {
                     </td>
                   </tr>
                 )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
