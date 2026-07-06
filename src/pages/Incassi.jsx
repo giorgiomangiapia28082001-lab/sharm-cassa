@@ -294,16 +294,16 @@ export default function Incassi() {
 
                 {/* Dettaglio voci */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '6px 12px', fontSize: 12, borderTop: '1px solid var(--linea)', paddingTop: 10 }}>
-                  {Number(r.eur_contanti) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti €</span><br /><strong>€ {Number(r.eur_contanti).toFixed(2)}</strong></div>}
-                  {Number(r.bonifici) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Bonifici</span><br /><strong>€ {Number(r.bonifici).toFixed(2)}</strong></div>}
-                  {Number(r.delivery_eur || 0) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Delivery €</span><br /><strong>€ {Number(r.delivery_eur).toFixed(2)}</strong></div>}
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti €</span><br /><strong>€ {Number(r.eur_contanti).toFixed(2)}</strong></div>
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>Bonifici</span><br /><strong>€ {Number(r.bonifici).toFixed(2)}</strong></div>
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>Delivery €</span><br /><strong>€ {Number(r.delivery_eur || 0).toFixed(2)}</strong></div>
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>POS</span><br /><strong>{Number(r.egp_pos).toFixed(0)} LE</strong></div>
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti LE</span><br /><strong>{Number(r.egp_contanti).toFixed(0)} LE</strong></div>
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>Delivery LE</span><br /><strong>{Number(r.delivery_egp || 0).toFixed(0)} LE</strong></div>
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti $</span><br /><strong>$ {Number(r.usd_contanti).toFixed(2)}</strong></div>
                   {fondoIeri > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>- Fondo ieri</span><br /><strong style={{ color: 'var(--corallo)' }}>- € {fondoIeri.toFixed(2)}</strong></div>}
-                  {Number(r.fondo_cassa) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>+ Fondo oggi</span><br /><strong>€ {Number(r.fondo_cassa).toFixed(2)}</strong></div>}
-                  {Number(r.egp_pos) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>POS</span><br /><strong>{Number(r.egp_pos).toFixed(0)} LE</strong></div>}
-                  {Number(r.egp_contanti) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti LE</span><br /><strong>{Number(r.egp_contanti).toFixed(0)} LE</strong></div>}
-                  {Number(r.delivery_egp || 0) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Delivery LE</span><br /><strong>{Number(r.delivery_egp).toFixed(0)} LE</strong></div>}
-                  {Number(r.usd_contanti) > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Contanti $</span><br /><strong>$ {Number(r.usd_contanti).toFixed(2)}</strong></div>}
-                  {r.numero_persone > 0 && <div><span style={{ color: 'var(--inchiostro-soft)' }}>Persone</span><br /><strong>{r.numero_persone}</strong></div>}
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>+ Fondo oggi</span><br /><strong>€ {Number(r.fondo_cassa).toFixed(2)}</strong></div>
+                  <div><span style={{ color: 'var(--inchiostro-soft)' }}>Persone</span><br /><strong>{r.numero_persone || 0}</strong></div>
                   <div><span style={{ color: 'var(--inchiostro-soft)' }}>Inserito da</span><br /><span style={{ color: 'var(--inchiostro-soft)' }}>{r.profiles?.nome || '—'}</span></div>
                 </div>
 
