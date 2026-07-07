@@ -132,6 +132,8 @@ export default function Dipendenti() {
     }
     carica()
   }
+
+  async function fotoToBase64(file) {
     return new Promise((resolve, reject) => {
       // Ridimensiona a max 200px per non appesantire il DB
       const img = new Image()
