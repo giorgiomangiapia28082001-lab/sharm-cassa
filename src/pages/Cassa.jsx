@@ -123,12 +123,14 @@ export default function Cassa() {
   async function salvaVersamento(e) {
     e.preventDefault()
     setSalvandoVersamento(true)
+    const isPOS = versamentoForm.valuta === 'EGP_POS'
     const { error } = await supabase.from('movimenti_cassa').insert({
       tipo: 'versamento',
       data: oggi(),
-      valuta_a: versamentoForm.valuta,
-      importo_a: Number(versamentoForm.importo),
-      note: versamentoForm.note || null,
+      valuta_a: isPOS ? 'EGP' : versamentoForm.valuta,
+      importo_a: isPOS ? 0 : Number(versamentoForm.importo),
+      importo_pos: isPOS ? Number(versamentoForm.importo) : 0,
+      note: (versamentoForm.note || (isPOS ? 'Versamento saldo POS iniziale' : null)),
       inserito_da: profile.id,
     })
     setSalvandoVersamento(false)
@@ -383,11 +385,12 @@ export default function Cassa() {
           </p>
           <form onSubmit={salvaVersamento}>
             <div className="field">
-              <label>Valuta</label>
+              <label>Dove entra</label>
               <select value={versamentoForm.valuta} onChange={(e) => setVersamentoForm((f) => ({ ...f, valuta: e.target.value }))}>
-                <option value="EUR">Euro (€)</option>
-                <option value="EGP">Lire egiziane (LE)</option>
-                <option value="USD">Dollari ($)</option>
+                <option value="EUR">Contanti Euro (€)</option>
+                <option value="EGP">Contanti Lire (LE)</option>
+                <option value="EGP_POS">Saldo POS (LE)</option>
+                <option value="USD">Contanti Dollari ($)</option>
               </select>
             </div>
             <div className="field" style={{ marginTop: 12 }}>
@@ -395,7 +398,7 @@ export default function Cassa() {
               <input type="number" step="0.01" min="0.01" value={versamentoForm.importo} onChange={(e) => setVersamentoForm((f) => ({ ...f, importo: e.target.value }))} placeholder="0.00" required />
             </div>
             <div className="field" style={{ marginTop: 12 }}>
-              <label>Note (es. "Fondo cassa luglio", "Versamento Gianluigi")</label>
+              <label>Note (es. "Fondo cassa luglio", "Saldo POS iniziale")</label>
               <input type="text" value={versamentoForm.note} onChange={(e) => setVersamentoForm((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
             </div>
             <button type="submit" className="btn btn-accent btn-sm" style={{ marginTop: 14 }} disabled={salvandoVersamento}>
@@ -444,7 +447,7 @@ export default function Cassa() {
                       : m.tipo === 'incasso_b2b'
                       ? `+ ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
                       : m.tipo === 'versamento'
-                      ? `+ ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
+                      ? `+ ${m.importo_pos > 0 ? `${Number(m.importo_pos).toFixed(0)} LE (POS)` : `${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`}`
                       : `${Number(m.importo_pos).toFixed(2)} LE da POS a contanti`}
                   </td>
                   <td style={{ color: 'var(--inchiostro-soft)' }}>{m.note || '—'}</td>
