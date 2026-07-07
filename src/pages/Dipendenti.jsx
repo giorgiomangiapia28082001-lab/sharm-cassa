@@ -373,16 +373,19 @@ export default function Dipendenti() {
                   </div>
                   {/* Pill presenze — solo attivi, sempre visibili a destra */}
                   {d.attivo && (
-                    <div style={{ display: 'flex', gap: 5, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 90 }}>
-                      <button className={`attendance-pill ${stato === 'presente' ? 'presente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'presente', d.nome)} disabled={!puoSegnare} title="Presente">P</button>
-                      <button className={`attendance-pill ${stato === 'parziale' ? 'parziale' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'parziale', d.nome)} disabled={!puoSegnare} title="Parziale">½</button>
-                      <button className={`attendance-pill ${stato === 'assente' ? 'assente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'assente', d.nome)} disabled={!puoSegnare} title="Assente">A</button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0, alignItems: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: 5 }}>
+                        <button className={`attendance-pill ${stato === 'presente' ? 'presente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'presente', d.nome)} disabled={!puoSegnare} title="Presente">P</button>
+                        <button className={`attendance-pill ${stato === 'parziale' ? 'parziale' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'parziale', d.nome)} disabled={!puoSegnare} title="Parziale">½</button>
+                        <button className={`attendance-pill ${stato === 'assente' ? 'assente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'assente', d.nome)} disabled={!puoSegnare} title="Assente">A</button>
+                      </div>
                       <button
                         className={`attendance-pill ${presenzeOggi[d.id]?.mattina ? 'parziale' : 'vuoto'}`}
                         onClick={() => segnaMattinaToggle(d.id)}
                         disabled={!puoSegnare}
                         title="Turno mattina"
-                      >M</button>
+                        style={{ width: '100%', fontSize: 11 }}
+                      >☀ Mattina</button>
                     </div>
                   )}
                 </div>
