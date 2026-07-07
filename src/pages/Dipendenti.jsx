@@ -47,7 +47,7 @@ export default function Dipendenti() {
     setPresenzeOggi(mapPres)
 
     // Carica tutte le presenze del mese corrente per contare le mattine
-    const inizioM = primoGiornoMeseCorrente
+    const inizioM = primoGiornoMeseLocale()
     const fineM = new Date(new Date(inizioM).getFullYear(), new Date(inizioM).getMonth() + 1, 0).toISOString().slice(0, 10)
     const { data: presMese } = await supabase.from('presenze').select('dipendente_id, data, mattina').eq('mattina', true).gte('data', inizioM).lte('data', fineM)
     const mapMattine = {}
