@@ -373,7 +373,7 @@ export default function Dipendenti() {
                   </div>
                   {/* Pill presenze — solo attivi, sempre visibili a destra */}
                   {d.attivo && (
-                    <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 5, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 90 }}>
                       <button className={`attendance-pill ${stato === 'presente' ? 'presente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'presente', d.nome)} disabled={!puoSegnare} title="Presente">P</button>
                       <button className={`attendance-pill ${stato === 'parziale' ? 'parziale' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'parziale', d.nome)} disabled={!puoSegnare} title="Parziale">½</button>
                       <button className={`attendance-pill ${stato === 'assente' ? 'assente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'assente', d.nome)} disabled={!puoSegnare} title="Assente">A</button>
@@ -382,7 +382,6 @@ export default function Dipendenti() {
                         onClick={() => segnaMattinaToggle(d.id)}
                         disabled={!puoSegnare}
                         title="Turno mattina"
-                        style={{ fontSize: 10, letterSpacing: 0 }}
                       >M</button>
                     </div>
                   )}
