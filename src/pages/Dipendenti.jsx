@@ -10,6 +10,7 @@ export default function Dipendenti() {
   const { profile, isMaster, isViewer } = useAuth()
   const [dipendenti, setDipendenti] = useState([])
   const [presenzeOggi, setPresenzeOggi] = useState({})
+  const [mattineMese, setMattineMese] = useState({}) // dipendente_id → [date mattine del mese]
   const [accontiTotali, setAccontiTotali] = useState({})
   const [accontiDettaglio, setAccontiDettaglio] = useState({}) // id → [{data, importo_eur, importo_egp, erogato_da, note}]
   const [mostraExDipendenti, setMostraExDipendenti] = useState(false)
@@ -44,6 +45,17 @@ export default function Dipendenti() {
     const mapPres = {}
     ;(pres || []).forEach((p) => { mapPres[p.dipendente_id] = p })
     setPresenzeOggi(mapPres)
+
+    // Carica tutte le presenze del mese corrente per contare le mattine
+    const inizioM = primoGiornoMeseCorrente
+    const fineM = new Date(new Date(inizioM).getFullYear(), new Date(inizioM).getMonth() + 1, 0).toISOString().slice(0, 10)
+    const { data: presMese } = await supabase.from('presenze').select('dipendente_id, data, mattina').eq('mattina', true).gte('data', inizioM).lte('data', fineM)
+    const mapMattine = {}
+    ;(presMese || []).forEach((p) => {
+      if (!mapMattine[p.dipendente_id]) mapMattine[p.dipendente_id] = []
+      mapMattine[p.dipendente_id].push(p.data)
+    })
+    setMattineMese(mapMattine)
 
     const { data: acc } = await supabase.from('acconti').select('*').order('data', { ascending: false })
 
@@ -103,7 +115,23 @@ export default function Dipendenti() {
     carica()
   }
 
-  async function fotoToBase64(file) {
+  async function segnaMattinaToggle(dipendenteId) {
+    if (!puoSegnare) return
+    const esistente = presenzeOggi[dipendenteId]
+    if (esistente) {
+      await supabase.from('presenze').update({ mattina: !esistente.mattina }).eq('id', esistente.id)
+    } else {
+      // Crea la riga presenza con solo mattina (senza stato sera)
+      await supabase.from('presenze').insert({
+        dipendente_id: dipendenteId,
+        data: dataSelezionata,
+        stato: 'assente', // sera non segnata
+        mattina: true,
+        inserito_da: profile.id,
+      })
+    }
+    carica()
+  }
     return new Promise((resolve, reject) => {
       // Ridimensiona a max 200px per non appesantire il DB
       const img = new Image()
@@ -349,6 +377,13 @@ export default function Dipendenti() {
                       <button className={`attendance-pill ${stato === 'presente' ? 'presente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'presente', d.nome)} disabled={!puoSegnare} title="Presente">P</button>
                       <button className={`attendance-pill ${stato === 'parziale' ? 'parziale' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'parziale', d.nome)} disabled={!puoSegnare} title="Parziale">½</button>
                       <button className={`attendance-pill ${stato === 'assente' ? 'assente' : 'vuoto'}`} onClick={() => segnaPresenza(d.id, 'assente', d.nome)} disabled={!puoSegnare} title="Assente">A</button>
+                      <button
+                        className={`attendance-pill ${presenzeOggi[d.id]?.mattina ? 'parziale' : 'vuoto'}`}
+                        onClick={() => segnaMattinaToggle(d.id)}
+                        disabled={!puoSegnare}
+                        title="Turno mattina"
+                        style={{ fontSize: 10, letterSpacing: 0 }}
+                      >M</button>
                     </div>
                   )}
                 </div>
@@ -425,6 +460,11 @@ export default function Dipendenti() {
                                 ⚠ {calcoloMese.giorni_parziali} giorni parziali da valutare a parte
                               </span>
                             )}
+                            {(mattineMese[d.id]?.length || 0) > 0 && (
+                              <span className="tag" style={{ marginLeft: 8, background: 'rgba(47,158,104,0.12)', color: 'var(--smeraldo)' }}>
+                                ☀ {mattineMese[d.id].length} turni mattina
+                              </span>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -442,20 +482,22 @@ export default function Dipendenti() {
                                 <strong>Giorni assenti:</strong> {calcoloMese.elenco_giorni_assenti.join(', ')}
                               </div>
                             )}
-
                             {calcoloMese.elenco_giorni_non_segnati?.length > 0 && (
                               <div style={{ fontSize: 13, color: '#8a6a2b', marginBottom: 6 }}>
                                 <strong>⚠ Nessun dato inserito (contati come assenti):</strong> {calcoloMese.elenco_giorni_non_segnati.join(', ')}
                               </div>
                             )}
-
                             {calcoloMese.elenco_giorni_parziali?.length > 0 && (
-                              <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>
+                              <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginBottom: 6 }}>
                                 <strong>Giorni parziali:</strong> {calcoloMese.elenco_giorni_parziali.join(', ')}
                               </div>
                             )}
-
-                            {!calcoloMese.elenco_giorni_assenti?.length && !calcoloMese.elenco_giorni_parziali?.length && (
+                            {mattineMese[d.id]?.length > 0 && (
+                              <div style={{ fontSize: 13, color: 'var(--smeraldo)' }}>
+                                <strong>☀ Turni mattina:</strong> {mattineMese[d.id].map(dt => new Date(dt + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })).join(', ')}
+                              </div>
+                            )}
+                            {!calcoloMese.elenco_giorni_assenti?.length && !calcoloMese.elenco_giorni_parziali?.length && !mattineMese[d.id]?.length && (
                               <div style={{ fontSize: 13, color: 'var(--smeraldo)' }}>
                                 Nessuna assenza questo mese.
                               </div>
