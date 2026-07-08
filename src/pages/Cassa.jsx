@@ -34,7 +34,7 @@ export default function Cassa() {
     setLoading(true)
     const [{ data: s }, { data: m }, { data: pAperto }, { data: pStorico }] = await Promise.all([
       supabase.from('saldo_cassa_attuale').select('*').single(),
-      supabase.from('movimenti_cassa').select('*, profiles:inserito_da(nome)').order('created_at', { ascending: false }).limit(30),
+      supabase.from('movimenti_cassa').select('*, profiles:inserito_da(nome)').order('data', { ascending: false }).order('created_at', { ascending: false }).limit(30),
       supabase.from('periodi_cassa').select('*').is('data_chiusura', null).single(),
       supabase.from('periodi_cassa').select('*, profiles:chiuso_da(nome)').not('data_chiusura', 'is', null).order('data_chiusura', { ascending: false }),
     ])
