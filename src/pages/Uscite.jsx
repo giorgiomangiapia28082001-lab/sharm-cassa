@@ -233,6 +233,86 @@ export default function Uscite() {
         </form>
       )}
 
+      {/* ── RIEPILOGO PER CATEGORIA ── */}
+      {!loading && righe.length > 0 && (() => {
+        const tassoEgp = 55 // fallback — idealmente si caricherebbe dal DB
+        const toEur = (importo, valuta) => {
+          if (valuta === 'EUR') return Number(importo)
+          if (valuta === 'EGP') return Number(importo) / tassoEgp
+          if (valuta === 'USD') return Number(importo) / 1.08
+          return 0
+        }
+
+        // Raggruppa per categoria usando le righe filtrate
+        const perCategoria = {}
+        righeFiltrate.forEach((r) => {
+          const nome = r.categorie_uscite?.nome || 'Altro'
+          if (!perCategoria[nome]) perCategoria[nome] = { totaleEur: 0, voci: 0 }
+          perCategoria[nome].totaleEur += toEur(r.importo, r.valuta)
+          perCategoria[nome].voci++
+        })
+
+        const totaleGenerale = Object.values(perCategoria).reduce((a, v) => a + v.totaleEur, 0)
+        if (totaleGenerale === 0) return null
+
+        const sorted = Object.entries(perCategoria).sort((a, b) => b[1].totaleEur - a[1].totaleEur)
+
+        const COLORI = [
+          '#c85a3b', '#d4845a', '#e8a87c', '#5b8fa8', '#7ab5c9',
+          '#4a7c6f', '#6aab9c', '#8b6fab', '#b99fd4', '#c4a84f',
+        ]
+
+        return (
+          <div className="card" style={{ marginBottom: 28 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 18, color: 'var(--notte)' }}>
+              📊 Riepilogo per categoria
+            </div>
+
+            {/* Grafico a barre */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+              {sorted.map(([nome, v], i) => {
+                const pct = Math.round((v.totaleEur / totaleGenerale) * 100)
+                return (
+                  <div key={nome}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>{nome}</span>
+                      <span style={{ color: 'var(--inchiostro-soft)' }}>
+                        € {v.totaleEur.toFixed(2)} · {pct}% · {v.voci} voce/i
+                      </span>
+                    </div>
+                    <div style={{ height: 10, borderRadius: 5, background: 'var(--sabbia-chiara)', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${pct}%`,
+                        borderRadius: 5,
+                        background: COLORI[i % COLORI.length],
+                        transition: 'width 0.4s ease',
+                      }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Totale + legenda */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, paddingTop: 14, borderTop: '1px solid var(--linea)' }}>
+              <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>
+                Totale (convertito in €): <strong style={{ color: 'var(--notte)' }}>€ {totaleGenerale.toFixed(2)}</strong>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {sorted.map(([nome], i) => (
+                  <div key={nome} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: COLORI[i % COLORI.length], flexShrink: 0 }} />
+                    {nome}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── STORICO ── */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
         <h3 style={{ fontSize: 16, color: 'var(--notte)', margin: 0, flex: '1 1 auto' }}>Storico</h3>
         <select value={filtroMetodo} onChange={(e) => setFiltroMetodo(e.target.value)} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--linea)', background: '#fff' }}>
