@@ -426,8 +426,7 @@ tr:last-child td { border-bottom: none; }
     padding: 10px 12px;
     overflow-x: auto;
     overflow-y: visible;
-    position: sticky;
-    top: 0;
+    position: relative;
     z-index: 100;
   }
   .sidebar::before { display: none; }
