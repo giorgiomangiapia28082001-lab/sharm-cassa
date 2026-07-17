@@ -319,41 +319,29 @@ export default function Riepilogo() {
           </div>
 
           <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Dettaglio per valuta</h3>
-          <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: 16 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Valuta</th>
-                  <th>Entrate sala</th>
-                  <th>Entrate delivery</th>
-                  <th>Uscite</th>
-                  <th>Netto</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><span className="tag">EUR</span></td>
-                  <td>€ {totIncassiEur.toFixed(2)}</td>
-                  <td>€ {totDeliveryEur.toFixed(2)}</td>
-                  <td>€ {totUsciteEur.toFixed(2)}</td>
-                  <td>€ {(totIncassiEur + totDeliveryEur - totUsciteEur).toFixed(2)}</td>
-                </tr>
-                <tr>
-                  <td><span className="tag">EGP</span></td>
-                  <td>{totIncassiEgp.toFixed(0)} LE</td>
-                  <td>{totDeliveryEgp.toFixed(0)} LE</td>
-                  <td>{totUsciteEgp.toFixed(0)} LE</td>
-                  <td>{(totIncassiEgp + totDeliveryEgp - totUsciteEgp).toFixed(0)} LE</td>
-                </tr>
-                <tr>
-                  <td><span className="tag">USD</span></td>
-                  <td>$ {totIncassiUsd.toFixed(2)}</td>
-                  <td>—</td>
-                  <td>$ {totUsciteUsd.toFixed(2)}</td>
-                  <td>$ {(totIncassiUsd - totUsciteUsd).toFixed(2)}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+            {[
+              { label: 'EUR', simbolo: '€', entrate: totIncassiEur, delivery: totDeliveryEur, uscite: totUsciteEur, fmt: v => `€ ${v.toFixed(2)}` },
+              { label: 'EGP', simbolo: 'LE', entrate: totIncassiEgp, delivery: totDeliveryEgp, uscite: totUsciteEgp, fmt: v => `${v.toFixed(0)} LE` },
+              { label: 'USD', simbolo: '$', entrate: totIncassiUsd, delivery: 0, uscite: totUsciteUsd, fmt: v => `$ ${v.toFixed(2)}` },
+            ].map(({ label, entrate, delivery, uscite, fmt }) => {
+              const netto = entrate + delivery - uscite
+              return (
+                <div key={label} className="card" style={{ padding: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span className="tag" style={{ fontSize: 14, fontWeight: 700 }}>{label}</span>
+                    <span style={{ fontWeight: 700, fontSize: 15, color: netto >= 0 ? 'var(--smeraldo)' : 'var(--corallo)' }}>
+                      {fmt(netto)} netto
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, fontSize: 13 }}>
+                    <div><div style={{ color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Entrate sala</div><strong>{fmt(entrate)}</strong></div>
+                    <div><div style={{ color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Delivery</div><strong>{fmt(delivery)}</strong></div>
+                    <div><div style={{ color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Uscite</div><strong style={{ color: 'var(--corallo)' }}>{fmt(uscite)}</strong></div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
           {/* ── CAMBI VALUTA del periodo ── */}

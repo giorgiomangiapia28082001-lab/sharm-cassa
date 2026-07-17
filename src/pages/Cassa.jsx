@@ -416,109 +416,101 @@ export default function Cassa() {
           <p>Cambi valuta, prelievi POS e versamenti appariranno qui.</p>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Tipo</th>
-                <th>Dettaglio</th>
-                <th>Note</th>
-                <th>Inserito da</th>
-                {isMaster && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {movimenti.map((m) => (
-                <React.Fragment key={m.id}>
-                <tr>
-                  <td>{new Date(m.data).toLocaleDateString('it-IT')}</td>
-                  <td>
-                    <span className="tag">{
-                      m.tipo === 'cambio_valuta' ? 'Cambio valuta' :
-                      m.tipo === 'incasso_b2b' ? 'Incasso Sadiki' :
-                      m.tipo === 'versamento' ? '💰 Versamento' :
-                      'Prelievo POS'
-                    }</span>
-                  </td>
-                  <td>
-                    {m.tipo === 'cambio_valuta'
-                      ? `${VALUTE[m.valuta_da]} ${Number(m.importo_da).toFixed(2)} → ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
-                      : m.tipo === 'incasso_b2b'
-                      ? `+ ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
-                      : m.tipo === 'versamento'
-                      ? `+ ${m.importo_pos > 0 ? `${Number(m.importo_pos).toFixed(0)} LE (POS)` : `${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`}`
-                      : `${Number(m.importo_pos).toFixed(2)} LE da POS a contanti`}
-                  </td>
-                  <td style={{ color: 'var(--inchiostro-soft)' }}>{m.note || '—'}</td>
-                  <td style={{ color: 'var(--inchiostro-soft)' }}>{m.profiles?.nome || '—'}</td>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {movimenti.map((m) => {
+            const tipoLabel = m.tipo === 'cambio_valuta' ? 'Cambio valuta' :
+              m.tipo === 'incasso_b2b' ? 'Incasso Sadiki' :
+              m.tipo === 'versamento' ? '💰 Versamento' : 'Prelievo POS'
+
+            const dettaglio = m.tipo === 'cambio_valuta'
+              ? `${VALUTE[m.valuta_da]} ${Number(m.importo_da).toFixed(2)} → ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
+              : m.tipo === 'incasso_b2b'
+              ? `+ ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
+              : m.tipo === 'versamento'
+              ? `+ ${m.importo_pos > 0 ? `${Number(m.importo_pos).toFixed(0)} LE (POS)` : `${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`}`
+              : `${Number(m.importo_pos).toFixed(2)} LE da POS a contanti`
+
+            return (
+              <React.Fragment key={m.id}>
+                <div className="card" style={{ padding: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <span className="tag" style={{ marginBottom: 6, display: 'inline-block' }}>{tipoLabel}</span>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{dettaglio}</div>
+                      {m.note && <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 3 }}>{m.note}</div>}
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>
+                        {new Date(m.data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
+                        {m.profiles?.nome || '—'}
+                      </div>
+                    </div>
+                  </div>
+
                   {isMaster && (
-                    <td style={{ whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', gap: 8, paddingTop: 10, borderTop: '1px solid var(--linea)' }}>
                       {m.tipo !== 'incasso_b2b' && (
-                        <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => setEditMovimento({
-                          id: m.id,
-                          tipo: m.tipo,
-                          data: m.data,
-                          importo_pos: m.importo_pos || '',
-                          importo_da: m.importo_da || '',
-                          importo_a: m.importo_a || '',
-                          valuta_da: m.valuta_da || '',
-                          valuta_a: m.valuta_a || '',
-                          note: m.note || '',
+                        <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setEditMovimento({
+                          id: m.id, tipo: m.tipo, data: m.data,
+                          importo_pos: m.importo_pos || '', importo_da: m.importo_da || '',
+                          importo_a: m.importo_a || '', valuta_da: m.valuta_da || '',
+                          valuta_a: m.valuta_a || '', note: m.note || '',
                         })}>Modifica</button>
                       )}
-                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaMovimento(m)}>Elimina</button>
-                    </td>
+                      <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaMovimento(m)}>Elimina</button>
+                    </div>
                   )}
-                </tr>
+                </div>
+
                 {isMaster && editMovimento?.id === m.id && (
-                  <tr>
-                    <td colSpan={6} style={{ padding: '12px 14px', background: 'var(--sabbia-chiara)' }}>
-                      <form onSubmit={salvaModificaMovimento}>
-                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div className="card" style={{ borderLeft: '3px solid var(--smeraldo)', padding: '14px' }}>
+                    <form onSubmit={salvaModificaMovimento}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div className="field" style={{ margin: 0 }}>
+                          <label>Data</label>
+                          <input type="date" value={editMovimento.data} onChange={(e) => setEditMovimento((f) => ({ ...f, data: e.target.value }))} required />
+                        </div>
+                        {editMovimento.tipo === 'prelievo_pos' && (
                           <div className="field" style={{ margin: 0 }}>
-                            <label>Data</label>
-                            <input type="date" value={editMovimento.data} onChange={(e) => setEditMovimento((f) => ({ ...f, data: e.target.value }))} required />
+                            <label>Importo LE</label>
+                            <input type="number" step="0.01" value={editMovimento.importo_pos} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_pos: e.target.value }))} required />
                           </div>
-                          {editMovimento.tipo === 'prelievo_pos' && (
+                        )}
+                        {editMovimento.tipo === 'versamento' && (
+                          <div className="field" style={{ margin: 0 }}>
+                            <label>Importo ({editMovimento.valuta_a})</label>
+                            <input type="number" step="0.01" value={editMovimento.importo_a} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_a: e.target.value }))} required />
+                          </div>
+                        )}
+                        {editMovimento.tipo === 'cambio_valuta' && (
+                          <>
                             <div className="field" style={{ margin: 0 }}>
-                              <label>Importo LE</label>
-                              <input type="number" step="0.01" value={editMovimento.importo_pos} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_pos: e.target.value }))} required />
+                              <label>Da ({editMovimento.valuta_da})</label>
+                              <input type="number" step="0.01" value={editMovimento.importo_da} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_da: e.target.value }))} required />
                             </div>
-                          )}
-                          {editMovimento.tipo === 'versamento' && (
                             <div className="field" style={{ margin: 0 }}>
-                              <label>Importo ({editMovimento.valuta_a})</label>
+                              <label>A ({editMovimento.valuta_a})</label>
                               <input type="number" step="0.01" value={editMovimento.importo_a} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_a: e.target.value }))} required />
                             </div>
-                          )}
-                          {editMovimento.tipo === 'cambio_valuta' && (
-                            <>
-                              <div className="field" style={{ margin: 0 }}>
-                                <label>Da ({editMovimento.valuta_da})</label>
-                                <input type="number" step="0.01" value={editMovimento.importo_da} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_da: e.target.value }))} required />
-                              </div>
-                              <div className="field" style={{ margin: 0 }}>
-                                <label>A ({editMovimento.valuta_a})</label>
-                                <input type="number" step="0.01" value={editMovimento.importo_a} onChange={(e) => setEditMovimento((f) => ({ ...f, importo_a: e.target.value }))} required />
-                              </div>
-                            </>
-                          )}
-                          <div className="field" style={{ margin: 0 }}>
-                            <label>Note</label>
-                            <input type="text" value={editMovimento.note} onChange={(e) => setEditMovimento((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
-                          </div>
-                          <button type="submit" className="btn btn-accent btn-sm">Salva</button>
-                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditMovimento(null)}>Annulla</button>
+                          </>
+                        )}
+                        <div className="field" style={{ margin: 0 }}>
+                          <label>Note</label>
+                          <input type="text" value={editMovimento.note} onChange={(e) => setEditMovimento((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
                         </div>
-                      </form>
-                    </td>
-                  </tr>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="submit" className="btn btn-accent btn-sm" style={{ flex: 1 }}>Salva</button>
+                          <button type="button" className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setEditMovimento(null)}>Annulla</button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
                 )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+              </React.Fragment>
+            )
+          })}
         </div>
       )}
     </div>

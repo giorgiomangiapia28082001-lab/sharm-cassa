@@ -318,36 +318,30 @@ export default function Soci() {
           <p>Le spese personali dei soci appariranno qui.</p>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Socio</th>
-                <th>Descrizione</th>
-                <th>Importo €</th>
-                <th>Importo LE</th>
-                {isMaster && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {speseDelPeriodo.map((s) => (
-                <tr key={s.id}>
-                  <td>{new Date(s.data).toLocaleDateString('it-IT')}</td>
-                  <td><span className="tag">{s.soci?.nome}</span></td>
-                  <td>{s.descrizione || '—'}</td>
-                  <td>€ {Number(s.importo_eur).toFixed(2)}</td>
-                  <td>{Number(s.importo_egp).toFixed(0)} LE</td>
-                  {isMaster && (
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => apriModificaRiga(s)}>Modifica</button>
-                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaRiga(s.id)}>Elimina</button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {speseDelPeriodo.map((s) => (
+            <div key={s.id} className="card" style={{ padding: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                <div>
+                  <span className="tag" style={{ marginBottom: 6, display: 'inline-block' }}>{s.soci?.nome}</span>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{s.descrizione || '—'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 3 }}>
+                    {new Date(s.data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  {Number(s.importo_eur) > 0 && <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--corallo)' }}>€ {Number(s.importo_eur).toFixed(2)}</div>}
+                  {Number(s.importo_egp) > 0 && <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--corallo)' }}>{Number(s.importo_egp).toFixed(0)} LE</div>}
+                </div>
+              </div>
+              {isMaster && (
+                <div style={{ display: 'flex', gap: 8, paddingTop: 10, borderTop: '1px solid var(--linea)' }}>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => apriModificaRiga(s)}>Modifica</button>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaRiga(s.id)}>Elimina</button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
