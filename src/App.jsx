@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
+import { ToastProvider, useToast } from './lib/Toast'
 import Login from './pages/Login'
 import Layout from './pages/Layout'
 import Riepilogo from './pages/Riepilogo'
@@ -11,6 +13,30 @@ import Dipendenti from './pages/Dipendenti'
 import Sadiki from './pages/Sadiki'
 import Soci from './pages/Soci'
 import Impostazioni from './pages/Impostazioni'
+
+// Avvisa in tempo reale quando la connessione cade o torna, così l'utente
+// capisce subito perché un salvataggio potrebbe fallire (o che ora può
+// riprovare in sicurezza).
+function AvvisoConnessione() {
+  const toast = useToast()
+
+  useEffect(() => {
+    function offline() {
+      toast.warning('Connessione a Internet assente. Le modifiche non potranno essere salvate finché la rete non torna.', 0)
+    }
+    function online() {
+      toast.success('Connessione ripristinata.', 3000)
+    }
+    window.addEventListener('offline', offline)
+    window.addEventListener('online', online)
+    return () => {
+      window.removeEventListener('offline', offline)
+      window.removeEventListener('online', online)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null
+}
 
 function RotteProtette() {
   const { session, profile, loading } = useAuth()
@@ -66,9 +92,12 @@ function RotteProtette() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <RotteProtette />
-      </AuthProvider>
+      <ToastProvider>
+        <AvvisoConnessione />
+        <AuthProvider>
+          <RotteProtette />
+        </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   )
 }
