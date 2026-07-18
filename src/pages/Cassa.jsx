@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useToast } from '../lib/Toast'
+import { esegui, avvisaSeOffline } from '../lib/operazioni'
+import { controllaCambioValuta } from '../lib/anomalie'
+import ConfermaAnomalia from '../lib/ConfermaAnomalia'
 
 import { oggiLocale } from '../lib/date'
 
@@ -10,11 +14,15 @@ const VALUTE = { EUR: '€', USD: '$', EGP: 'LE' }
 
 export default function Cassa() {
   const { profile, isMaster } = useAuth()
+  const toast = useToast()
   const [saldo, setSaldo] = useState(null)
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [salvandoCambio, setSalvandoCambio] = useState(false)
   const [salvandoPrelievo, setSalvandoPrelievo] = useState(false)
+  const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 55 })
+  // Anomalia sul cambio valuta in attesa di conferma prima di salvare
+  const [anomaliaCambio, setAnomaliaCambio] = useState(null)
 
   const [cambioForm, setCambioForm] = useState({ valuta_da: 'EUR', importo_da: '', valuta_a: 'EGP', importo_a: '', note: '' })
   const [prelievoForm, setPrelievoForm] = useState({ importo_pos: '', note: '' })
@@ -32,70 +40,110 @@ export default function Cassa() {
 
   async function carica() {
     setLoading(true)
-    const [{ data: s }, { data: m }, { data: pAperto }, { data: pStorico }] = await Promise.all([
-      supabase.from('saldo_cassa_attuale').select('*').single(),
-      supabase.from('movimenti_cassa').select('*, profiles:inserito_da(nome)').order('data', { ascending: false }).order('created_at', { ascending: false }).limit(30),
-      supabase.from('periodi_cassa').select('*').is('data_chiusura', null).single(),
-      supabase.from('periodi_cassa').select('*, profiles:chiuso_da(nome)').not('data_chiusura', 'is', null).order('data_chiusura', { ascending: false }),
+    const [
+      { data: s, error: errS },
+      { data: m, error: errM },
+      { data: pAperto, error: errP },
+      { data: pStorico, error: errPs },
+      { data: t, error: errT },
+    ] = await Promise.all([
+      // maybeSingle() invece di single(): se non c'è ancora nessuna riga
+      // (es. cassa mai inizializzata) non deve far esplodere la pagina.
+      esegui(supabase.from('saldo_cassa_attuale').select('*').maybeSingle(), toast, 'il caricamento del saldo cassa'),
+      esegui(supabase.from('movimenti_cassa').select('*, profiles:inserito_da(nome)').order('data', { ascending: false }).order('created_at', { ascending: false }).limit(30), toast, 'il caricamento dei movimenti'),
+      esegui(supabase.from('periodi_cassa').select('*').is('data_chiusura', null).maybeSingle(), toast, 'il caricamento del periodo aperto'),
+      esegui(supabase.from('periodi_cassa').select('*, profiles:chiuso_da(nome)').not('data_chiusura', 'is', null).order('data_chiusura', { ascending: false }), toast, 'il caricamento dello storico periodi'),
+      esegui(supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1), toast, 'il caricamento dei tassi di cambio'),
     ])
-    setSaldo(s)
-    setMovimenti(m || [])
-    setPeriodoAperto(pAperto || null)
-    setStoricoPeriodi(pStorico || [])
+    if (!errS) setSaldo(s)
+    if (!errM) setMovimenti(m || [])
+    if (!errP) setPeriodoAperto(pAperto || null)
+    if (!errPs) setStoricoPeriodi(pStorico || [])
+    if (!errT && t && t.length) setTassi(t[0])
     setLoading(false)
   }
 
-  useEffect(() => { carica() }, [])
+  useEffect(() => {
+    avvisaSeOffline(toast)
+    carica()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function salvaCambio(e) {
+  async function salvaCambio(e, forzato = false) {
     e.preventDefault()
+
+    // Controllo anomalia: il cambio implicito inserito è troppo lontano dal
+    // tasso configurato in Impostazioni → probabile errore di battitura.
+    if (!forzato) {
+      const messaggioAnomalia = controllaCambioValuta(
+        cambioForm.valuta_da, cambioForm.importo_da,
+        cambioForm.valuta_a, cambioForm.importo_a,
+        tassi
+      )
+      if (messaggioAnomalia) {
+        setAnomaliaCambio({ messaggio: messaggioAnomalia, e })
+        return
+      }
+    }
+
     setSalvandoCambio(true)
-    const { error } = await supabase.from('movimenti_cassa').insert({
-      tipo: 'cambio_valuta',
-      data: oggi(),
-      valuta_da: cambioForm.valuta_da,
-      importo_da: Number(cambioForm.importo_da) || 0,
-      valuta_a: cambioForm.valuta_a,
-      importo_a: Number(cambioForm.importo_a) || 0,
-      note: cambioForm.note || null,
-      inserito_da: profile.id,
-    })
+    const { error } = await esegui(
+      supabase.from('movimenti_cassa').insert({
+        tipo: 'cambio_valuta',
+        data: oggi(),
+        valuta_da: cambioForm.valuta_da,
+        importo_da: Number(cambioForm.importo_da) || 0,
+        valuta_a: cambioForm.valuta_a,
+        importo_a: Number(cambioForm.importo_a) || 0,
+        note: cambioForm.note || null,
+        inserito_da: profile.id,
+      }),
+      toast, 'il salvataggio del cambio valuta'
+    )
     setSalvandoCambio(false)
+    setAnomaliaCambio(null)
     if (!error) {
+      toast.success('Cambio valuta registrato.')
       setCambioForm({ valuta_da: 'EUR', importo_da: '', valuta_a: 'EGP', importo_a: '', note: '' })
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
+  }
+
+  function confermaAnomaliaCambioESalva() {
+    if (anomaliaCambio?.e) salvaCambio(anomaliaCambio.e, true)
   }
 
   async function salvaPrelievo(e) {
     e.preventDefault()
     setSalvandoPrelievo(true)
-    const { error } = await supabase.from('movimenti_cassa').insert({
-      tipo: 'prelievo_pos',
-      data: oggi(),
-      importo_pos: Number(prelievoForm.importo_pos) || 0,
-      note: prelievoForm.note || null,
-      inserito_da: profile.id,
-    })
+    const { error } = await esegui(
+      supabase.from('movimenti_cassa').insert({
+        tipo: 'prelievo_pos',
+        data: oggi(),
+        importo_pos: Number(prelievoForm.importo_pos) || 0,
+        note: prelievoForm.note || null,
+        inserito_da: profile.id,
+      }),
+      toast, 'il salvataggio del prelievo POS'
+    )
     setSalvandoPrelievo(false)
     if (!error) {
+      toast.success('Prelievo registrato.')
       setPrelievoForm({ importo_pos: '', note: '' })
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
   async function eliminaMovimento(m) {
     if (m.tipo === 'incasso_b2b') {
-      alert('Questo movimento proviene da un pagamento Sadiki. Per eliminarlo, vai nella sezione Sadiki ed elimina il pagamento da lì.')
+      toast.warning('Questo movimento proviene da un pagamento Sadiki. Per eliminarlo, vai nella sezione Sadiki ed elimina il pagamento da lì.')
       return
     }
     if (!confirm('Eliminare questo movimento? Il saldo verrà ricalcolato.')) return
-    const { error } = await supabase.from('movimenti_cassa').delete().eq('id', m.id)
-    if (!error) carica()
+    const { error } = await esegui(supabase.from('movimenti_cassa').delete().eq('id', m.id), toast, 'l\'eliminazione del movimento')
+    if (!error) {
+      toast.success('Movimento eliminato.')
+      carica()
+    }
   }
 
   async function salvaModificaMovimento(e) {
@@ -115,59 +163,58 @@ export default function Cassa() {
       payload.note = editMovimento.note || null
       payload.data = editMovimento.data
     }
-    const { error } = await supabase.from('movimenti_cassa').update(payload).eq('id', editMovimento.id)
-    if (!error) { setEditMovimento(null); carica() }
-    else alert('Errore: ' + error.message)
+    const { error } = await esegui(supabase.from('movimenti_cassa').update(payload).eq('id', editMovimento.id), toast, 'il salvataggio delle modifiche')
+    if (!error) { toast.success('Movimento modificato.'); setEditMovimento(null); carica() }
   }
 
   async function salvaVersamento(e) {
     e.preventDefault()
     setSalvandoVersamento(true)
     const isPOS = versamentoForm.valuta === 'EGP_POS'
-    const { error } = await supabase.from('movimenti_cassa').insert({
-      tipo: 'versamento',
-      data: oggi(),
-      valuta_a: isPOS ? 'EGP' : versamentoForm.valuta,
-      importo_a: isPOS ? 0 : Number(versamentoForm.importo),
-      importo_pos: isPOS ? Number(versamentoForm.importo) : 0,
-      note: (versamentoForm.note || (isPOS ? 'Versamento saldo POS iniziale' : null)),
-      inserito_da: profile.id,
-    })
+    const { error } = await esegui(
+      supabase.from('movimenti_cassa').insert({
+        tipo: 'versamento',
+        data: oggi(),
+        valuta_a: isPOS ? 'EGP' : versamentoForm.valuta,
+        importo_a: isPOS ? 0 : Number(versamentoForm.importo),
+        importo_pos: isPOS ? Number(versamentoForm.importo) : 0,
+        note: (versamentoForm.note || (isPOS ? 'Versamento saldo POS iniziale' : null)),
+        inserito_da: profile.id,
+      }),
+      toast, 'il salvataggio del versamento'
+    )
     setSalvandoVersamento(false)
     if (!error) {
+      toast.success('Versamento registrato.')
       setVersamentoForm({ valuta: 'EUR', importo: '', note: '' })
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
   async function chiudiPeriodo() {
     setChiudendo(true)
-    const { error } = await supabase.rpc('chiudi_periodo_cassa', {
-      p_note: noteChiusura || null,
-      p_chiuso_da: profile.id,
-    })
+    const { error } = await esegui(
+      supabase.rpc('chiudi_periodo_cassa', { p_note: noteChiusura || null, p_chiuso_da: profile.id }),
+      toast, 'la chiusura del periodo'
+    )
     setChiudendo(false)
     if (!error) {
+      toast.success('Periodo chiuso correttamente.')
       setMostraConfermaChiusura(false)
       setNoteChiusura('')
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
   async function riapriPeriodo(id) {
     if (!confirm('Riaprire questo periodo passato per correggerlo? Finché resta riaperto non potrai inserire nuovi incassi/uscite/movimenti: ricordati di richiuderlo subito dopo la correzione per tornare al periodo corrente.')) return
     setRiaprendo(true)
-    const { error } = await supabase.rpc('riapri_periodo_cassa', { p_periodo_id: id })
+    const { error } = await esegui(supabase.rpc('riapri_periodo_cassa', { p_periodo_id: id }), toast, 'la riapertura del periodo')
     setRiaprendo(false)
     if (!error) {
+      toast.success('Periodo riaperto.')
       setMostraStorico(false)
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
@@ -513,6 +560,12 @@ export default function Cassa() {
           })}
         </div>
       )}
+
+      <ConfermaAnomalia
+        messaggio={anomaliaCambio?.messaggio}
+        onConferma={confermaAnomaliaCambioESalva}
+        onAnnulla={() => setAnomaliaCambio(null)}
+      />
     </div>
   )
 }

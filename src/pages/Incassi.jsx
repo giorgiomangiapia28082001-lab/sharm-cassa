@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useToast } from '../lib/Toast'
+import { esegui, avvisaSeOffline } from '../lib/operazioni'
+import { controllaPrezzoPersona } from '../lib/anomalie'
+import ConfermaAnomalia from '../lib/ConfermaAnomalia'
 
 import { oggiLocale } from '../lib/date'
 
@@ -22,6 +26,7 @@ const VUOTO = {
 
 export default function Incassi() {
   const { profile, isMaster, isViewer } = useAuth()
+  const toast = useToast()
   const [righe, setRighe] = useState([])
   const [form, setForm] = useState(VUOTO)
   const [loading, setLoading] = useState(true)
@@ -29,21 +34,33 @@ export default function Incassi() {
   const [mostraForm, setMostraForm] = useState(!isViewer)
   const [editandoId, setEditandoId] = useState(null)
   const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 55 })
+  // Messaggio di anomalia in attesa di conferma da parte dell'utente
+  // (es. prezzo a persona fuori scala). null = nessuna anomalia in sospeso.
+  const [anomalia, setAnomalia] = useState(null)
 
   async function carica() {
     setLoading(true)
-    const [{ data, error }, { data: t }] = await Promise.all([
-      supabase.from('incassi').select('*, profiles:inserito_da(nome)').order('data', { ascending: false }).limit(60),
-      supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1),
+    const [{ data, error }, { data: t, error: errT }] = await Promise.all([
+      esegui(
+        supabase.from('incassi').select('*, profiles:inserito_da(nome)').order('data', { ascending: false }).limit(60),
+        toast,
+        'il caricamento dello storico incassi'
+      ),
+      esegui(
+        supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1),
+        toast,
+        'il caricamento dei tassi di cambio'
+      ),
     ])
-    if (!error) setRighe(data)
-    if (t && t.length) setTassi(t[0])
+    if (!error) setRighe(data || [])
+    if (!errT && t && t.length) setTassi(t[0])
     setLoading(false)
   }
 
   useEffect(() => {
+    avvisaSeOffline(toast)
     carica()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function update(campo, valore) {
     setForm((f) => ({ ...f, [campo]: valore }))
@@ -72,10 +89,8 @@ export default function Incassi() {
     setMostraForm(true)
   }
 
-  async function salva(e) {
-    e.preventDefault()
-    setSalvando(true)
-    const payload = {
+  function costruisciPayload() {
+    return {
       data: form.data,
       eur_contanti: Number(form.eur_contanti) || 0,
       fondo_cassa: Number(form.fondo_cassa) || 0,
@@ -88,37 +103,69 @@ export default function Incassi() {
       numero_persone: Number(form.numero_persone) || 0,
       note: form.note || null,
     }
+  }
 
-    let error
-    if (editandoId) {
-      // Modifica: solo il Master può farlo
-      const res = await supabase.from('incassi').update(payload).eq('id', editandoId)
-      error = res.error
-    } else {
-      const res = await supabase.from('incassi').insert({ ...payload, inserito_da: profile.id })
-      error = res.error
+  async function salva(e, forzato = false) {
+    e.preventDefault()
+
+    const payload = costruisciPayload()
+
+    // Controllo anomalia: prezzo medio a persona fuori scala (es. importi
+    // in LE inseriti per errore nei campi in EUR). Se rilevata e non ancora
+    // confermata dall'utente, mostriamo il dialogo e sospendiamo il salvataggio.
+    if (!forzato) {
+      const eurEgpRate = Number(tassi.eur_egp) || 1
+      const eurUsdRate = Number(tassi.eur_usd) || 1
+      const totaleStimatoEur =
+        payload.eur_contanti + payload.bonifici + payload.delivery_eur +
+        (payload.egp_pos + payload.egp_contanti + payload.delivery_egp) / eurEgpRate +
+        payload.usd_contanti / eurUsdRate
+
+      const messaggioAnomalia = controllaPrezzoPersona(totaleStimatoEur, payload.numero_persone)
+      if (messaggioAnomalia) {
+        setAnomalia({ messaggio: messaggioAnomalia, e })
+        return
+      }
     }
+
+    setSalvando(true)
+
+    const risultato = editandoId
+      ? await esegui(supabase.from('incassi').update(payload).eq('id', editandoId), toast, 'il salvataggio delle modifiche')
+      : await esegui(supabase.from('incassi').insert({ ...payload, inserito_da: profile.id }), toast, 'il salvataggio dell\'incasso')
 
     setSalvando(false)
-    if (!error) {
+    setAnomalia(null)
+    if (!risultato.error) {
+      toast.success(editandoId ? 'Modifiche salvate.' : 'Incasso salvato.')
       annullaForm()
       carica()
-    } else {
-      alert('Errore nel salvataggio: ' + error.message)
     }
+  }
+
+  function confermaAnomaliaESalva() {
+    if (anomalia?.e) salva(anomalia.e, true)
   }
 
   async function eliminaRiga(id) {
     if (!confirm('Eliminare questo incasso? L\'operazione non è reversibile.')) return
-    const { error } = await supabase.from('incassi').delete().eq('id', id)
+    const { error } = await esegui(supabase.from('incassi').delete().eq('id', id), toast, 'l\'eliminazione dell\'incasso')
     if (!error) {
+      toast.success('Incasso eliminato.')
       carica()
-    } else {
-      alert('Errore nell\'eliminazione: ' + error.message)
     }
   }
 
   const puoInserire = isMaster || profile?.ruolo === 'operatore'
+
+  // Calcolo pesante (sort + fondo cassa giorno precedente) fatto una sola
+  // volta per ogni cambio di dati, invece che ad ogni render della pagina.
+  const righeConFondoIeri = useMemo(() => {
+    return [...righe]
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .map((r, i, arr) => ({ r, fondoIeri: i > 0 ? Number(arr[i - 1].fondo_cassa) : 0 }))
+      .reverse()
+  }, [righe])
 
   return (
     <div>
@@ -237,10 +284,7 @@ export default function Incassi() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[...righe].sort((a, b) => a.created_at.localeCompare(b.created_at)).map((r, i, arr) => ({
-            r, i, arr,
-            fondoIeri: i > 0 ? Number(arr[i - 1].fondo_cassa) : 0,
-          })).reverse().map(({ r, fondoIeri }) => {
+          {righeConFondoIeri.map(({ r, fondoIeri }) => {
             const eurUsdRate = Number(tassi.eur_usd) || 1
             const eurEgpRate = Number(tassi.eur_egp) || 1
 
@@ -319,6 +363,12 @@ export default function Incassi() {
           })}
         </div>
       )}
+
+      <ConfermaAnomalia
+        messaggio={anomalia?.messaggio}
+        onConferma={confermaAnomaliaESalva}
+        onAnnulla={() => setAnomalia(null)}
+      />
     </div>
   )
 }
