@@ -20,7 +20,7 @@ export default function Cassa() {
   const [loading, setLoading] = useState(true)
   const [salvandoCambio, setSalvandoCambio] = useState(false)
   const [salvandoPrelievo, setSalvandoPrelievo] = useState(false)
-  const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 55 })
+  const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
   // Anomalia sul cambio valuta in attesa di conferma prima di salvare
   const [anomaliaCambio, setAnomaliaCambio] = useState(null)
 

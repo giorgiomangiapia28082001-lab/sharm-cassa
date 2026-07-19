@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useToast } from '../lib/Toast'
+import { esegui, avvisaSeOffline } from '../lib/operazioni'
 
 import { oggiLocale } from '../lib/date'
 
@@ -8,6 +10,7 @@ const oggi = oggiLocale
 
 export default function Soci() {
   const { isMaster, profile } = useAuth()
+  const toast = useToast()
   const [soci, setSoci] = useState([])
   const [spese, setSpese] = useState([])
   const [loading, setLoading] = useState(true)
@@ -35,7 +38,7 @@ export default function Soci() {
     const [{ data: s }, { data: sp }, { data: pAperto }, { data: pStorico }] = await Promise.all([
       supabase.from('soci').select('*').order('nome'),
       supabase.from('spese_socio').select('*, soci(nome)').order('data', { ascending: false }),
-      supabase.from('periodi_soci').select('*').is('data_chiusura', null).single(),
+      supabase.from('periodi_soci').select('*').is('data_chiusura', null).maybeSingle(),
       supabase.from('periodi_soci').select('*, profiles:chiuso_da(nome)').not('data_chiusura', 'is', null).order('data_chiusura', { ascending: false }),
     ])
     setSoci(s || [])
@@ -46,32 +49,33 @@ export default function Soci() {
     setLoading(false)
   }
 
-  useEffect(() => { carica() }, [])
+  useEffect(() => { avvisaSeOffline(toast); carica() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function chiudiPeriodo() {
     setChiudendo(true)
-    const { error } = await supabase.rpc('chiudi_periodo_soci', {
-      p_note: noteChiusura || null,
-      p_chiuso_da: profile.id,
-    })
+    const { error } = await esegui(
+      supabase.rpc('chiudi_periodo_soci', { p_note: noteChiusura || null, p_chiuso_da: profile.id }),
+      toast, 'la chiusura del periodo'
+    )
     setChiudendo(false)
     if (!error) {
+      toast.success('Periodo chiuso.')
       setMostraConfermaChiusura(false)
       setNoteChiusura('')
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
   async function riapriPeriodo(id) {
     if (!confirm('Riaprire questo periodo passato per correggerlo? Finché resta riaperto, le nuove spese inserite andranno in questo vecchio periodo: ricordati di richiuderlo subito dopo la correzione.')) return
-    const { error } = await supabase.rpc('riapri_periodo_soci', { p_periodo_id: id })
+    const { error } = await esegui(
+      supabase.rpc('riapri_periodo_soci', { p_periodo_id: id }),
+      toast, 'la riapertura del periodo'
+    )
     if (!error) {
+      toast.success('Periodo riaperto.')
       setMostraStorico(false)
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
@@ -103,31 +107,27 @@ export default function Soci() {
       importo_egp: Number(form.importo_egp) || 0,
     }
 
-    let error
-    if (editandoId) {
-      const res = await supabase.from('spese_socio').update(payload).eq('id', editandoId)
-      error = res.error
-    } else {
-      const res = await supabase.from('spese_socio').insert(payload)
-      error = res.error
-    }
+    const { error } = editandoId
+      ? await esegui(supabase.from('spese_socio').update(payload).eq('id', editandoId), toast, 'il salvataggio della spesa')
+      : await esegui(supabase.from('spese_socio').insert(payload), toast, 'il salvataggio della spesa')
 
     setSalvando(false)
     if (!error) {
+      toast.success(editandoId ? 'Spesa modificata.' : 'Spesa salvata.')
       annullaForm()
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
   async function eliminaRiga(id) {
     if (!confirm('Eliminare questa spesa? L\'operazione non è reversibile.')) return
-    const { error } = await supabase.from('spese_socio').delete().eq('id', id)
+    const { error } = await esegui(
+      supabase.from('spese_socio').delete().eq('id', id),
+      toast, 'l\'eliminazione della spesa'
+    )
     if (!error) {
+      toast.success('Spesa eliminata.')
       carica()
-    } else {
-      alert('Errore nell\'eliminazione: ' + error.message)
     }
   }
 

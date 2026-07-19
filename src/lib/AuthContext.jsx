@@ -9,11 +9,15 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   async function loadProfile(userId) {
+    // maybeSingle() invece di single(): se l'utente esiste in auth ma non ha
+    // ancora una riga in `profiles` (ruolo non assegnato), single() lancerebbe
+    // un errore. Con maybeSingle() otteniamo semplicemente data = null e
+    // l'app mostra il messaggio "account senza ruolo" invece di rompersi.
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
     if (!error) setProfile(data)
   }
 

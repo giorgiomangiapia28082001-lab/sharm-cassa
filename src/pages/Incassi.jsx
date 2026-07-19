@@ -6,7 +6,7 @@ import { esegui, avvisaSeOffline } from '../lib/operazioni'
 import { controllaPrezzoPersona } from '../lib/anomalie'
 import ConfermaAnomalia from '../lib/ConfermaAnomalia'
 
-import { oggiLocale } from '../lib/date'
+import { oggiLocale, confrontaStringhe } from '../lib/date'
 
 const oggi = oggiLocale
 
@@ -33,7 +33,7 @@ export default function Incassi() {
   const [salvando, setSalvando] = useState(false)
   const [mostraForm, setMostraForm] = useState(!isViewer)
   const [editandoId, setEditandoId] = useState(null)
-  const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 55 })
+  const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
   // Messaggio di anomalia in attesa di conferma da parte dell'utente
   // (es. prezzo a persona fuori scala). null = nessuna anomalia in sospeso.
   const [anomalia, setAnomalia] = useState(null)
@@ -162,7 +162,7 @@ export default function Incassi() {
   // volta per ogni cambio di dati, invece che ad ogni render della pagina.
   const righeConFondoIeri = useMemo(() => {
     return [...righe]
-      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .sort((a, b) => confrontaStringhe(a.created_at, b.created_at))
       .map((r, i, arr) => ({ r, fondoIeri: i > 0 ? Number(arr[i - 1].fondo_cassa) : 0 }))
       .reverse()
   }, [righe])

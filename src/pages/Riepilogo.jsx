@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { oggiLocale, primoGiornoMeseLocale } from '../lib/date'
+import { oggiLocale, primoGiornoMeseLocale, confrontaStringhe } from '../lib/date'
 
 const oggi = oggiLocale
 const inizioMese = primoGiornoMeseLocale
@@ -115,7 +115,7 @@ export default function Riepilogo() {
   // Cioè: per ogni giorno, sommiamo (eur_contanti + bonifici + fondo_cassa)
   // e sottraiamo il fondo_cassa del giorno PRECEDENTE (che era già incluso nei contanti).
   // Ordiniamo per data per trovare il giorno precedente.
-  const incassiOrdinati = [...incassi].sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const incassiOrdinati = [...incassi].sort((a, b) => confrontaStringhe(a.created_at, b.created_at))
   const totIncassiEur = incassiOrdinati.reduce((acc, r, i) => {
     const fondoIeri = i > 0 ? Number(incassiOrdinati[i - 1].fondo_cassa) : 0
     const incassoReale = Number(r.eur_contanti) + Number(r.bonifici) - fondoIeri + Number(r.fondo_cassa)

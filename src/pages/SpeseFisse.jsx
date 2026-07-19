@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useToast } from '../lib/Toast'
+import { esegui, avvisaSeOffline } from '../lib/operazioni'
 import { primoGiornoMeseLocale as primoGiornoMese } from '../lib/date'
 
 const TIPO_LABEL = {
@@ -10,6 +12,7 @@ const TIPO_LABEL = {
 
 export default function SpeseFisse() {
   const { profile, isMaster } = useAuth()
+  const toast = useToast()
   const [voci, setVoci] = useState([])
   const [pagamenti, setPagamenti] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,7 +36,7 @@ export default function SpeseFisse() {
     setLoading(false)
   }
 
-  useEffect(() => { carica() }, [])
+  useEffect(() => { avvisaSeOffline(toast); carica() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function annullaForm() {
     setForm(VUOTO)
@@ -64,41 +67,37 @@ export default function SpeseFisse() {
       giorno_scadenza: Number(form.giorno_scadenza) || 1,
       note: form.note || null,
     }
-    let error
-    if (editandoId) {
-      const res = await supabase.from('spese_fisse').update(payload).eq('id', editandoId)
-      error = res.error
-    } else {
-      const res = await supabase.from('spese_fisse').insert(payload)
-      error = res.error
-    }
+    const { error } = editandoId
+      ? await esegui(supabase.from('spese_fisse').update(payload).eq('id', editandoId), toast, 'il salvataggio della voce')
+      : await esegui(supabase.from('spese_fisse').insert(payload), toast, 'il salvataggio della voce')
     setSalvando(false)
     if (!error) {
+      toast.success(editandoId ? 'Voce modificata.' : 'Voce aggiunta.')
       annullaForm()
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
   async function eliminaVoce(id) {
     if (!confirm('Eliminare questa voce fissa? Lo storico dei pagamenti passati resterà comunque visibile in Uscite.')) return
-    const { error } = await supabase.from('spese_fisse').update({ attiva: false }).eq('id', id)
-    if (!error) carica()
+    const { error } = await esegui(supabase.from('spese_fisse').update({ attiva: false }).eq('id', id), toast, 'l\'eliminazione della voce')
+    if (!error) { toast.success('Voce eliminata.'); carica() }
   }
 
   async function segnaPagato(voce) {
     if (!confirm(`Confermi il pagamento di ${voce.nome} per questo mese?`)) return
-    const { error } = await supabase.from('pagamenti_spese_fisse').insert({
-      spesa_fissa_id: voce.id,
-      mese,
-      importo: voce.importo,
-      inserito_da: profile.id,
-    })
+    const { error } = await esegui(
+      supabase.from('pagamenti_spese_fisse').insert({
+        spesa_fissa_id: voce.id,
+        mese,
+        importo: voce.importo,
+        inserito_da: profile.id,
+      }),
+      toast, 'la registrazione del pagamento'
+    )
     if (!error) {
+      toast.success('Pagamento registrato.')
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
@@ -109,11 +108,13 @@ export default function SpeseFisse() {
       `Confermi l'annullamento?`
     )
     if (!conferma) return
-    const { error } = await supabase.from('pagamenti_spese_fisse').delete().eq('id', pagamento.id)
+    const { error } = await esegui(
+      supabase.from('pagamenti_spese_fisse').delete().eq('id', pagamento.id),
+      toast, 'l\'annullamento del pagamento'
+    )
     if (!error) {
+      toast.success('Pagamento annullato.')
       carica()
-    } else {
-      alert('Errore nell\'annullamento: ' + error.message)
     }
   }
 

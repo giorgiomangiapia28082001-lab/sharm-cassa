@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useToast } from '../lib/Toast'
+import { esegui, avvisaSeOffline } from '../lib/operazioni'
 import { oggiLocale, primoGiornoMeseLocale } from '../lib/date'
 
 const oggi = oggiLocale
@@ -11,6 +13,7 @@ const fmtKg = (n) => Number(n || 0).toFixed(3).replace('.', ',')
 
 export default function Sadiki() {
   const { profile, isMaster } = useAuth()
+  const toast = useToast()
   const puoInserire = isMaster || profile?.ruolo === 'operatore'
 
   const [clienti, setClienti] = useState([])
@@ -70,8 +73,8 @@ export default function Sadiki() {
     setLoading(false)
   }
 
-  useEffect(() => { caricaClienti() }, [])
-  useEffect(() => { carica() }, [clienteId, dataInizio, dataFine])
+  useEffect(() => { avvisaSeOffline(toast); caricaClienti() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { carica() }, [clienteId, dataInizio, dataFine]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ──────────────────────────────────────────────
   // Totali
@@ -94,7 +97,10 @@ export default function Sadiki() {
     // Upload foto se presente
     if (formProd.foto) {
       const ext = formProd.foto.name.split('.').pop()
-      const path = `b2b/${clienteId}/${Date.now()}.${ext}`
+      // Aggiungiamo una parte casuale al nome: due upload nello stesso
+      // millisecondo (o modifiche rapide) altrimenti userebbero lo stesso path
+      // e una foto sovrascriverebbe l'altra.
+      const path = `b2b/${clienteId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
       const { error: upErr } = await supabase.storage.from('foto').upload(path, formProd.foto)
       if (!upErr) {
         const { data: urlData } = supabase.storage.from('foto').getPublicUrl(path)
@@ -113,23 +119,17 @@ export default function Sadiki() {
       inserito_da: profile.id,
     }
 
-    let error
-    if (editandoProdId) {
-      const res = await supabase.from('produzioni_b2b').update(payload).eq('id', editandoProdId)
-      error = res.error
-    } else {
-      const res = await supabase.from('produzioni_b2b').insert(payload)
-      error = res.error
-    }
+    const { error } = editandoProdId
+      ? await esegui(supabase.from('produzioni_b2b').update(payload).eq('id', editandoProdId), toast, 'il salvataggio della produzione')
+      : await esegui(supabase.from('produzioni_b2b').insert(payload), toast, 'il salvataggio della produzione')
 
     setSalvandoProd(false)
     if (!error) {
+      toast.success(editandoProdId ? 'Produzione modificata.' : 'Produzione salvata.')
       setFormProd(VUOTO_PROD)
       setEditandoProdId(null)
       setMostraFormProd(false)
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
@@ -149,9 +149,11 @@ export default function Sadiki() {
 
   async function eliminaProduzione(id) {
     if (!confirm('Eliminare questa produzione?')) return
-    const { error } = await supabase.from('produzioni_b2b').delete().eq('id', id)
-    if (!error) carica()
-    else alert('Errore: ' + error.message)
+    const { error } = await esegui(
+      supabase.from('produzioni_b2b').delete().eq('id', id),
+      toast, 'l\'eliminazione della produzione'
+    )
+    if (!error) { toast.success('Produzione eliminata.'); carica() }
   }
 
   // ──────────────────────────────────────────────
@@ -171,22 +173,26 @@ export default function Sadiki() {
       inserito_da: profile.id,
     }
 
-    const { error } = await supabase.from('pagamenti_b2b').insert(payload)
+    const { error } = await esegui(
+      supabase.from('pagamenti_b2b').insert(payload),
+      toast, 'il salvataggio del pagamento'
+    )
     setSalvandoPag(false)
     if (!error) {
+      toast.success('Pagamento salvato.')
       setFormPag({ ...VUOTO_PAG, data_da: dataInizio, data_a: oggi() })
       setMostraFormPag(false)
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
   async function eliminaPagamento(id) {
     if (!confirm('Eliminare questo pagamento? Verrà rimosso anche dalla Cassa.')) return
-    const { error } = await supabase.from('pagamenti_b2b').delete().eq('id', id)
-    if (!error) carica()
-    else alert('Errore: ' + error.message)
+    const { error } = await esegui(
+      supabase.from('pagamenti_b2b').delete().eq('id', id),
+      toast, 'l\'eliminazione del pagamento'
+    )
+    if (!error) { toast.success('Pagamento eliminato.'); carica() }
   }
 
   // ──────────────────────────────────────────────

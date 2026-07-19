@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useToast } from '../lib/Toast'
+import { esegui, avvisaSeOffline } from '../lib/operazioni'
 
 export default function Impostazioni() {
   const { profile } = useAuth()
+  const toast = useToast()
   const [tassi, setTassi] = useState({ eur_usd: '', eur_egp: '' })
   const [categorie, setCategorie] = useState([])
   const [nuovaCategoria, setNuovaCategoria] = useState('')
@@ -19,35 +22,47 @@ export default function Impostazioni() {
     setCategorie(c || [])
   }
 
-  useEffect(() => { carica() }, [])
+  useEffect(() => { avvisaSeOffline(toast); carica() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function salvaTassi(e) {
     e.preventDefault()
     setSalvandoTassi(true)
-    const { error } = await supabase.from('tassi_cambio').insert({
-      eur_usd: Number(tassi.eur_usd),
-      eur_egp: Number(tassi.eur_egp),
-      created_by: profile.id,
-    })
+    const { error } = await esegui(
+      supabase.from('tassi_cambio').insert({
+        eur_usd: Number(tassi.eur_usd),
+        eur_egp: Number(tassi.eur_egp),
+        created_by: profile.id,
+      }),
+      toast, 'il salvataggio dei tassi'
+    )
     setSalvandoTassi(false)
-    setMessaggio(error ? 'Errore nel salvataggio.' : 'Tassi di cambio aggiornati.')
-    setTimeout(() => setMessaggio(''), 3000)
+    if (!error) {
+      setMessaggio('Tassi di cambio aggiornati.')
+      setTimeout(() => setMessaggio(''), 3000)
+    }
   }
 
   async function aggiungiCategoria(e) {
     e.preventDefault()
     if (!nuovaCategoria.trim()) return
     const ordine = categorie.length ? Math.max(...categorie.map((c) => c.ordine)) + 1 : 1
-    const { error } = await supabase.from('categorie_uscite').insert({ nome: nuovaCategoria.trim(), ordine })
+    const { error } = await esegui(
+      supabase.from('categorie_uscite').insert({ nome: nuovaCategoria.trim(), ordine }),
+      toast, 'l\'aggiunta della categoria'
+    )
     if (!error) {
+      toast.success('Categoria aggiunta.')
       setNuovaCategoria('')
       carica()
     }
   }
 
   async function toggleCategoria(id, attiva) {
-    await supabase.from('categorie_uscite').update({ attiva: !attiva }).eq('id', id)
-    carica()
+    const { error } = await esegui(
+      supabase.from('categorie_uscite').update({ attiva: !attiva }).eq('id', id),
+      toast, 'la modifica della categoria'
+    )
+    if (!error) carica()
   }
 
   return (

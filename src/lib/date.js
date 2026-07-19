@@ -17,3 +17,12 @@ export function primoGiornoMeseLocale(d = new Date()) {
   const mese = String(d.getMonth() + 1).padStart(2, '0')
   return `${anno}-${mese}-01`
 }
+
+// Confronto sicuro tra due stringhe (es. created_at o data) da usare dentro
+// .sort(). Se un valore è null/undefined (capita con righe importate a mano o
+// inserite via SQL, dove created_at può mancare), localeCompare andrebbe in
+// errore e farebbe diventare bianca l'intera pagina. Qui trattiamo il valore
+// mancante come stringa vuota, così l'ordinamento regge sempre.
+export function confrontaStringhe(a, b) {
+  return String(a || '').localeCompare(String(b || ''))
+}

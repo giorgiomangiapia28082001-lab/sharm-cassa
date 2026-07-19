@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useToast } from '../lib/Toast'
+import { esegui, avvisaSeOffline } from '../lib/operazioni'
+import { useTassi, tassiSicuri } from '../lib/tassi'
 
 import { oggiLocale } from '../lib/date'
 
@@ -18,6 +21,8 @@ const VUOTO = {
 
 export default function Uscite() {
   const { profile, isMaster, isViewer } = useAuth()
+  const toast = useToast()
+  const { tassi } = useTassi()
   const [righe, setRighe] = useState([])
   const [categorie, setCategorie] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,12 +38,18 @@ export default function Uscite() {
   async function carica() {
     setLoading(true)
     const [{ data: us }, { data: cat }] = await Promise.all([
-      supabase
-        .from('uscite')
-        .select('*, categorie_uscite(nome), profiles:inserito_da(nome)')
-        .order('data', { ascending: false })
-        .limit(100),
-      supabase.from('categorie_uscite').select('*').eq('attiva', true).order('ordine'),
+      esegui(
+        supabase
+          .from('uscite')
+          .select('*, categorie_uscite(nome), profiles:inserito_da(nome)')
+          .order('data', { ascending: false })
+          .limit(100),
+        toast, 'il caricamento delle uscite'
+      ),
+      esegui(
+        supabase.from('categorie_uscite').select('*').eq('attiva', true).order('ordine'),
+        toast, 'il caricamento delle categorie'
+      ),
     ])
     if (us) setRighe(us)
     if (cat) {
@@ -49,8 +60,9 @@ export default function Uscite() {
   }
 
   useEffect(() => {
+    avvisaSeOffline(toast)
     carica()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function update(campo, valore) {
     setForm((f) => ({ ...f, [campo]: valore }))
@@ -89,6 +101,8 @@ export default function Uscite() {
       if (!uploadError) {
         const { data } = supabase.storage.from('foto').getPublicUrl(path)
         foto_url = data.publicUrl
+      } else {
+        toast.warning('La foto non è stata caricata (controlla la connessione). L\'uscita verrà salvata senza foto.')
       }
     }
 
@@ -102,13 +116,15 @@ export default function Uscite() {
         metodo_pagamento: form.metodo_pagamento,
       }
       if (foto_url) payload.foto_url = foto_url
-      const { error } = await supabase.from('uscite').update(payload).eq('id', editandoId)
+      const { error } = await esegui(
+        supabase.from('uscite').update(payload).eq('id', editandoId),
+        toast, 'il salvataggio delle modifiche'
+      )
       setSalvando(false)
       if (!error) {
+        toast.success('Uscita modificata.')
         annullaForm()
         carica()
-      } else {
-        alert('Errore nel salvataggio: ' + error.message)
       }
     } else {
       const payload = {
@@ -121,13 +137,15 @@ export default function Uscite() {
         foto_url,
         inserito_da: profile.id,
       }
-      const { error } = await supabase.from('uscite').insert(payload)
+      const { error } = await esegui(
+        supabase.from('uscite').insert(payload),
+        toast, 'il salvataggio dell\'uscita'
+      )
       setSalvando(false)
       if (!error) {
+        toast.success('Uscita salvata.')
         setForm((f) => ({ ...f, descrizione: '', importo: '', foto: null }))
         carica()
-      } else {
-        alert('Errore nel salvataggio: ' + error.message)
       }
     }
   }
@@ -137,11 +155,13 @@ export default function Uscite() {
       ? 'Questa uscita è collegata a un acconto dipendente: eliminandola, anche la parte corrispondente dell\'acconto verrà azzerata. Continuare?'
       : 'Eliminare questa uscita? L\'operazione non è reversibile.'
     if (!confirm(messaggio)) return
-    const { error } = await supabase.from('uscite').delete().eq('id', r.id)
+    const { error } = await esegui(
+      supabase.from('uscite').delete().eq('id', r.id),
+      toast, 'l\'eliminazione dell\'uscita'
+    )
     if (!error) {
+      toast.success('Uscita eliminata.')
       carica()
-    } else {
-      alert('Errore nell\'eliminazione: ' + error.message)
     }
   }
 
@@ -235,11 +255,13 @@ export default function Uscite() {
 
       {/* ── RIEPILOGO PER CATEGORIA ── */}
       {!loading && righe.length > 0 && (() => {
-        const tassoEgp = 55 // fallback — idealmente si caricherebbe dal DB
+        // Usa i tassi reali impostati in Impostazioni (non più numeri fissi nel
+        // codice), così il totale in EUR resta corretto quando il cambio cambia.
+        const { eurUsd, eurEgp } = tassiSicuri(tassi)
         const toEur = (importo, valuta) => {
           if (valuta === 'EUR') return Number(importo)
-          if (valuta === 'EGP') return Number(importo) / tassoEgp
-          if (valuta === 'USD') return Number(importo) / 1.08
+          if (valuta === 'EGP') return Number(importo) / eurEgp
+          if (valuta === 'USD') return Number(importo) / eurUsd
           return 0
         }
 
