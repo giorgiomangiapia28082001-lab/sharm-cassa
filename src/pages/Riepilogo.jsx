@@ -13,6 +13,7 @@ export default function Riepilogo() {
   const { isMaster } = useAuth()
   const [loading, setLoading] = useState(true)
   const [incassi, setIncassi] = useState([])
+  const [chioschetto, setChioschetto] = useState([])
   const [uscite, setUscite] = useState([])
   const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
   const [dataInizio, setDataInizio] = useState(inizioMese())
@@ -92,13 +93,15 @@ export default function Riepilogo() {
 
   async function carica() {
     setLoading(true)
-    const [{ data: inc }, { data: usc }, { data: t }, { data: mov }] = await Promise.all([
+    const [{ data: inc }, { data: chio }, { data: usc }, { data: t }, { data: mov }] = await Promise.all([
       supabase.from('incassi').select('*').gte('data', dataInizio).lte('data', dataFine).order('data'),
+      supabase.from('incassi_chioschetto').select('*').gte('data', dataInizio).lte('data', dataFine).order('data'),
       supabase.from('uscite').select('*').gte('data', dataInizio).lte('data', dataFine),
       supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1),
       supabase.from('movimenti_cassa').select('*').eq('tipo', 'cambio_valuta').gte('data', dataInizio).lte('data', dataFine).order('data'),
     ])
     setIncassi(inc || [])
+    setChioschetto(chio || [])
     setUscite(usc || [])
     setMovimentiCambio(mov || [])
     const t0 = t && t.length ? t[0] : { eur_usd: 1.08, eur_egp: 60 }
@@ -139,7 +142,17 @@ export default function Riepilogo() {
 
   const incassiInEur = totIncassiEur + totDeliveryEur + (totIncassiUsd / eurUsdRate) + ((totIncassiEgp + totDeliveryEgp) / eurEgpRate)
   const usciteInEur = totUsciteEur + (totUsciteUsd / eurUsdRate) + (totUsciteEgp / eurEgpRate)
-  const nettoInEur = incassiInEur - usciteInEur
+
+  // ── CHIOSCHETTO (contabilità separata) ──
+  // Somma semplice per valuta: il chioschetto non ha fondo cassa né delivery.
+  const chioEur = chioschetto.reduce((a, r) => a + Number(r.eur_contanti) + Number(r.bonifici), 0)
+  const chioEgp = chioschetto.reduce((a, r) => a + Number(r.egp_pos) + Number(r.egp_contanti), 0)
+  const chioUsd = chioschetto.reduce((a, r) => a + Number(r.usd_contanti), 0)
+  const chioschettoInEur = chioEur + (chioUsd / eurUsdRate) + (chioEgp / eurEgpRate)
+
+  // Incasso complessivo dei proprietari = ristorante + chioschetto
+  const incassiTotaliInEur = incassiInEur + chioschettoInEur
+  const nettoInEur = incassiTotaliInEur - usciteInEur
 
   // Serie giornaliera per il grafico
   const giorniMap = {}
@@ -205,7 +218,15 @@ export default function Riepilogo() {
           <div className="stats-grid">
             <div className="stat-card">
               <div className="stat-label">Incassi totali (≈ EUR)</div>
-              <div className="stat-value positivo">€ {incassiInEur.toFixed(2)}</div>
+              <div className="stat-value positivo">€ {incassiTotaliInEur.toFixed(2)}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">di cui Ristorante (≈ EUR)</div>
+              <div className="stat-value">€ {incassiInEur.toFixed(2)}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">di cui Chioschetto (≈ EUR)</div>
+              <div className="stat-value">€ {chioschettoInEur.toFixed(2)}</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">di cui Delivery (≈ EUR)</div>
@@ -321,11 +342,11 @@ export default function Riepilogo() {
           <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Dettaglio per valuta</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
             {[
-              { label: 'EUR', simbolo: '€', entrate: totIncassiEur, delivery: totDeliveryEur, uscite: totUsciteEur, fmt: v => `€ ${v.toFixed(2)}` },
-              { label: 'EGP', simbolo: 'LE', entrate: totIncassiEgp, delivery: totDeliveryEgp, uscite: totUsciteEgp, fmt: v => `${v.toFixed(0)} LE` },
-              { label: 'USD', simbolo: '$', entrate: totIncassiUsd, delivery: 0, uscite: totUsciteUsd, fmt: v => `$ ${v.toFixed(2)}` },
-            ].map(({ label, entrate, delivery, uscite, fmt }) => {
-              const netto = entrate + delivery - uscite
+              { label: 'EUR', simbolo: '€', entrate: totIncassiEur, delivery: totDeliveryEur, chio: chioEur, uscite: totUsciteEur, fmt: v => `€ ${v.toFixed(2)}` },
+              { label: 'EGP', simbolo: 'LE', entrate: totIncassiEgp, delivery: totDeliveryEgp, chio: chioEgp, uscite: totUsciteEgp, fmt: v => `${v.toFixed(0)} LE` },
+              { label: 'USD', simbolo: '$', entrate: totIncassiUsd, delivery: 0, chio: chioUsd, uscite: totUsciteUsd, fmt: v => `$ ${v.toFixed(2)}` },
+            ].map(({ label, entrate, delivery, chio, uscite, fmt }) => {
+              const netto = entrate + delivery + chio - uscite
               return (
                 <div key={label} className="card" style={{ padding: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -334,9 +355,10 @@ export default function Riepilogo() {
                       {fmt(netto)} netto
                     </span>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, fontSize: 13 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, fontSize: 13 }}>
                     <div><div style={{ color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Entrate sala</div><strong>{fmt(entrate)}</strong></div>
                     <div><div style={{ color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Delivery</div><strong>{fmt(delivery)}</strong></div>
+                    <div><div style={{ color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Chioschetto</div><strong>{fmt(chio)}</strong></div>
                     <div><div style={{ color: 'var(--inchiostro-soft)', marginBottom: 2 }}>Uscite</div><strong style={{ color: 'var(--corallo)' }}>{fmt(uscite)}</strong></div>
                   </div>
                 </div>
