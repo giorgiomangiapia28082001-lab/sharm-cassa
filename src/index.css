@@ -437,4 +437,26 @@ tr:last-child td { border-bottom: none; }
   .brand, .brand-sub, .sidebar-footer { display: none; }
   .nav-link { white-space: nowrap; margin-bottom: 0; padding: 8px 10px; font-size: 13px; }
   .main-content { padding: 16px 14px 80px; }
+
+  /* Su telefono i moduli vanno su una colonna sola: le caselle non restano
+     larghe e non "spingono" la pagina di lato. */
+  .form-grid { grid-template-columns: 1fr; gap: 12px; }
+  /* Alcuni campi (es. Descrizione) chiedono di occupare 2 colonne su desktop;
+     su mobile, con una sola colonna, va annullato per non sforare. */
+  .form-grid > .field[style*="span 2"],
+  .form-grid > .field[style*="span 3"] { grid-column: auto !important; }
+}
+
+/* --- Protezioni anti-scroll orizzontale (valgono ovunque) --- */
+/* Nessun elemento deve poter spingere la pagina più larga dello schermo. */
+html, body, #root { max-width: 100%; overflow-x: hidden; }
+.main-content { max-width: 100%; }
+/* Gli input a larghezza fissa (date, number su iOS) non devono superare il
+   contenitore: li vincoliamo alla larghezza disponibile. */
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
