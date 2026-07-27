@@ -31,6 +31,8 @@ export default function Soci() {
     descrizione: '',
     importo_eur: '',
     importo_egp: '',
+    allegato: null,        // nuovo file scelto (immagine o PDF)
+    foto_url_esistente: '', // allegato già salvato (in modifica)
   })
 
   async function carica() {
@@ -80,7 +82,7 @@ export default function Soci() {
   }
 
   function annullaForm() {
-    setForm({ socio_id: soci[0]?.id || '', data: oggi(), descrizione: '', importo_eur: '', importo_egp: '' })
+    setForm({ socio_id: soci[0]?.id || '', data: oggi(), descrizione: '', importo_eur: '', importo_egp: '', allegato: null, foto_url_esistente: '' })
     setEditandoId(null)
   }
 
@@ -91,6 +93,8 @@ export default function Soci() {
       descrizione: s.descrizione || '',
       importo_eur: s.importo_eur || '',
       importo_egp: s.importo_egp || '',
+      allegato: null,
+      foto_url_esistente: s.foto_url || '',
     })
     setEditandoId(s.id)
     setMostraForm(true)
@@ -99,12 +103,31 @@ export default function Soci() {
   async function salva(e) {
     e.preventDefault()
     setSalvando(true)
+
+    // Se è stato scelto un nuovo allegato (foto o PDF), lo carichiamo prima
+    // nello Storage e ne salviamo l'URL. Se manca la rete, avvisiamo e
+    // salviamo comunque la spesa senza allegato (l'importo è la cosa
+    // importante da non perdere).
+    let foto_url = form.foto_url_esistente || null
+    if (form.allegato) {
+      const ext = form.allegato.name.split('.').pop()
+      const path = `soci/${form.socio_id || 'na'}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: uploadError } = await supabase.storage.from('foto').upload(path, form.allegato)
+      if (!uploadError) {
+        const { data } = supabase.storage.from('foto').getPublicUrl(path)
+        foto_url = data.publicUrl
+      } else {
+        toast.warning('L\'allegato non è stato caricato (controlla la connessione). La spesa verrà salvata senza allegato.')
+      }
+    }
+
     const payload = {
       socio_id: form.socio_id,
       data: form.data,
       descrizione: form.descrizione || null,
       importo_eur: Number(form.importo_eur) || 0,
       importo_egp: Number(form.importo_egp) || 0,
+      foto_url,
     }
 
     const { error } = editandoId
@@ -294,6 +317,25 @@ export default function Soci() {
               <label>Importo LE</label>
               <input type="number" step="0.01" value={form.importo_egp} onChange={(e) => setForm((f) => ({ ...f, importo_egp: e.target.value }))} placeholder="0.00" />
             </div>
+            <div className="field" style={{ gridColumn: 'span 2' }}>
+              <label>Allegato — foto o PDF (opzionale)</label>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => setForm((f) => ({ ...f, allegato: e.target.files?.[0] || null }))}
+              />
+              {form.allegato && (
+                <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 4 }}>
+                  Nuovo file selezionato: {form.allegato.name}
+                </div>
+              )}
+              {!form.allegato && form.foto_url_esistente && (
+                <div style={{ fontSize: 12, marginTop: 4 }}>
+                  <a href={form.foto_url_esistente} target="_blank" rel="noreferrer">📎 Allegato attuale</a>
+                  <span style={{ color: 'var(--inchiostro-soft)' }}> — scegli un file per sostituirlo</span>
+                </div>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <button type="submit" className="btn btn-accent" disabled={salvando}>
@@ -328,6 +370,13 @@ export default function Soci() {
                   <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 3 }}>
                     {new Date(s.data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
+                  {s.foto_url && (
+                    <div style={{ marginTop: 6 }}>
+                      <a href={s.foto_url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
+                        📎 {/\.pdf($|\?)/i.test(s.foto_url) ? 'Vedi PDF' : 'Vedi allegato'}
+                      </a>
+                    </div>
+                  )}
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   {Number(s.importo_eur) > 0 && <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--corallo)' }}>€ {Number(s.importo_eur).toFixed(2)}</div>}
