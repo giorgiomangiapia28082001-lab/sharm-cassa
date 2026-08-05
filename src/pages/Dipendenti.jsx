@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
-import { useToast } from '../lib/Toast'
-import { esegui, avvisaSeOffline } from '../lib/operazioni'
 
 import { oggiLocale, primoGiornoMeseLocale } from '../lib/date'
 
@@ -10,7 +8,6 @@ const oggi = oggiLocale
 
 export default function Dipendenti() {
   const { profile, isMaster, isViewer } = useAuth()
-  const toast = useToast()
   const [dipendenti, setDipendenti] = useState([])
   const [presenzeOggi, setPresenzeOggi] = useState({})
   const [mattineMese, setMattineMese] = useState({}) // dipendente_id → [date mattine del mese]
@@ -63,10 +60,7 @@ export default function Dipendenti() {
     const { data: acc } = await supabase.from('acconti').select('*').order('data', { ascending: false })
 
     // Recupera il periodo cassa aperto per filtrare gli acconti
-    // maybeSingle(): subito dopo una chiusura periodo può non esistere nessun
-    // periodo aperto. Con single() la pagina Dipendenti andava in errore e gli
-    // acconti non si caricavano; con maybeSingle() otteniamo null e proseguiamo.
-    const { data: periodoAperto } = await supabase.from('periodi_cassa').select('id').is('data_chiusura', null).maybeSingle()
+    const { data: periodoAperto } = await supabase.from('periodi_cassa').select('id').is('data_chiusura', null).single()
     const periodoCassaId = periodoAperto?.id || null
 
     const mapAcc = {}
@@ -96,7 +90,7 @@ export default function Dipendenti() {
     setLoading(false)
   }
 
-  useEffect(() => { avvisaSeOffline(toast); carica() }, [dataSelezionata]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { carica() }, [dataSelezionata])
 
   async function segnaPresenza(dipendenteId, stato, nomeDipendente) {
     if (!puoSegnare) return
@@ -109,22 +103,14 @@ export default function Dipendenti() {
         `${nomeDipendente}: stai cambiando da "${labelStato[esistente.stato]}" a "${labelStato[stato]}". Confermi?`
       )
       if (!conferma) return
-      const { error } = await esegui(
-        supabase.from('presenze').update({ stato }).eq('id', esistente.id),
-        toast, 'il salvataggio della presenza'
-      )
-      if (error) return
+      await supabase.from('presenze').update({ stato }).eq('id', esistente.id)
     } else {
-      const { error } = await esegui(
-        supabase.from('presenze').insert({
-          dipendente_id: dipendenteId,
-          data: dataSelezionata,
-          stato,
-          inserito_da: profile.id,
-        }),
-        toast, 'il salvataggio della presenza'
-      )
-      if (error) return
+      await supabase.from('presenze').insert({
+        dipendente_id: dipendenteId,
+        data: dataSelezionata,
+        stato,
+        inserito_da: profile.id,
+      })
     }
     carica()
   }
@@ -133,24 +119,16 @@ export default function Dipendenti() {
     if (!puoSegnare) return
     const esistente = presenzeOggi[dipendenteId]
     if (esistente) {
-      const { error } = await esegui(
-        supabase.from('presenze').update({ mattina: !esistente.mattina }).eq('id', esistente.id),
-        toast, 'il salvataggio del turno mattina'
-      )
-      if (error) return
+      await supabase.from('presenze').update({ mattina: !esistente.mattina }).eq('id', esistente.id)
     } else {
       // Crea la riga presenza con solo mattina (senza stato sera)
-      const { error } = await esegui(
-        supabase.from('presenze').insert({
-          dipendente_id: dipendenteId,
-          data: dataSelezionata,
-          stato: 'assente', // sera non segnata
-          mattina: true,
-          inserito_da: profile.id,
-        }),
-        toast, 'il salvataggio del turno mattina'
-      )
-      if (error) return
+      await supabase.from('presenze').insert({
+        dipendente_id: dipendenteId,
+        data: dataSelezionata,
+        stato: 'assente', // sera non segnata
+        mattina: true,
+        inserito_da: profile.id,
+      })
     }
     carica()
   }
@@ -188,71 +166,72 @@ export default function Dipendenti() {
       }
     }
 
-    const { error } = await esegui(
-      supabase.from('dipendenti').insert({
-        nome: nuovo.nome,
-        ruolo_lavoro: nuovo.ruolo_lavoro || null,
-        data_inizio: nuovo.data_inizio || null,
-        stipendio_eur: Number(nuovo.stipendio_eur) || 0,
-        stipendio_egp: Number(nuovo.stipendio_egp) || 0,
-        foto_url,
-      }),
-      toast, 'il salvataggio del dipendente'
-    )
+    const { data: inserted, error } = await supabase.from('dipendenti').insert({
+      nome: nuovo.nome,
+      ruolo_lavoro: nuovo.ruolo_lavoro || null,
+      data_inizio: nuovo.data_inizio || null,
+      stipendio_eur: Number(nuovo.stipendio_eur) || 0,
+      stipendio_egp: Number(nuovo.stipendio_egp) || 0,
+      foto_url,
+    }).select()
+    if (error) { setSalvandoNuovo(false); alert('Errore salvataggio: ' + error.message); return }
     setSalvandoNuovo(false)
     if (!error) {
-      toast.success('Dipendente aggiunto.')
       setNuovo({ nome: '', ruolo_lavoro: '', data_inizio: '', stipendio_eur: '', stipendio_egp: '', foto: null })
       setMostraNuovo(false)
       carica()
+    } else {
+      alert('Errore: ' + error.message)
     }
   }
 
   async function salvaAcconto(dipendenteId) {
     setSalvandoAcconto(true)
-    const { error } = await esegui(
-      supabase.from('acconti').insert({
-        dipendente_id: dipendenteId,
-        data: oggi(),
-        importo_eur: Number(accontoForm.importo_eur) || 0,
-        importo_egp: Number(accontoForm.importo_egp) || 0,
-        note: accontoForm.note || null,
-        erogato_da: accontoForm.erogato_da || 'direttore',
-        inserito_da: profile.id,
-      }),
-      toast, 'il salvataggio dell\'acconto'
-    )
+    const { error } = await supabase.from('acconti').insert({
+      dipendente_id: dipendenteId,
+      data: oggi(),
+      importo_eur: Number(accontoForm.importo_eur) || 0,
+      importo_egp: Number(accontoForm.importo_egp) || 0,
+      note: accontoForm.note || null,
+      erogato_da: accontoForm.erogato_da || 'direttore',
+      inserito_da: profile.id,
+    })
     setSalvandoAcconto(false)
     if (!error) {
-      toast.success('Acconto registrato.')
       setAccontoForm({ importo_eur: '', importo_egp: '', note: '', erogato_da: 'direttore' })
       carica()
+    } else {
+      alert('Errore: ' + error.message)
     }
   }
 
   async function terminaRapporto(d) {
     if (!confirm(`Terminare il rapporto di lavoro con ${d.nome}? Il dipendente verrà spostato tra gli ex dipendenti. I dati storici (presenze, acconti) restano conservati.`)) return
-    const { error } = await esegui(supabase.from('dipendenti').update({ attivo: false }).eq('id', d.id), toast, 'la fine del rapporto')
-    if (!error) { toast.success('Rapporto terminato.'); setDipendenteAperto(null); carica() }
+    const { error } = await supabase.from('dipendenti').update({ attivo: false }).eq('id', d.id)
+    if (error) alert('Errore: ' + error.message)
+    else { setDipendenteAperto(null); carica() }
   }
 
   async function riassumi(d) {
     if (!confirm(`Riassumere ${d.nome}? Il dipendente tornerà nella lista attiva.`)) return
-    const { error } = await esegui(supabase.from('dipendenti').update({ attivo: true }).eq('id', d.id), toast, 'la riassunzione')
-    if (!error) { toast.success('Dipendente riassunto.'); carica() }
+    const { error } = await supabase.from('dipendenti').update({ attivo: true }).eq('id', d.id)
+    if (error) alert('Errore: ' + error.message)
+    else carica()
   }
 
   async function eliminaDipendente(d) {
     if (!confirm(`ELIMINAZIONE DEFINITIVA di ${d.nome}.\n\nATTENZIONE: verranno eliminati anche tutti i suoi dati storici (presenze, acconti, stipendi). Questa azione non può essere annullata.\n\nContinuare?`)) return
     if (!confirm(`Sei sicuro? Tutti i dati di ${d.nome} verranno cancellati per sempre.`)) return
-    const { error } = await esegui(supabase.from('dipendenti').delete().eq('id', d.id), toast, 'l\'eliminazione del dipendente')
-    if (!error) { toast.success('Dipendente eliminato.'); setDipendenteAperto(null); carica() }
+    const { error } = await supabase.from('dipendenti').delete().eq('id', d.id)
+    if (error) alert('Errore: ' + error.message)
+    else { setDipendenteAperto(null); carica() }
   }
 
   async function eliminaAcconto(id, nomeDip) {
     if (!confirm(`Eliminare questo acconto di ${nomeDip}? Verrà rimossa anche la relativa voce dalle Uscite.`)) return
-    const { error } = await esegui(supabase.from('acconti').delete().eq('id', id), toast, 'l\'eliminazione dell\'acconto')
-    if (!error) { toast.success('Acconto eliminato.'); carica() }
+    const { error } = await supabase.from('acconti').delete().eq('id', id)
+    if (error) alert('Errore: ' + error.message)
+    else carica()
   }
 
   function apriModifica(d) {
@@ -281,23 +260,21 @@ export default function Dipendenti() {
       }
     }
 
-    const { error } = await esegui(
-      supabase.from('dipendenti').update({
-        nome: editForm.nome,
-        ruolo_lavoro: editForm.ruolo_lavoro || null,
-        data_inizio: editForm.data_inizio || null,
-        stipendio_eur: Number(editForm.stipendio_eur) || 0,
-        stipendio_egp: Number(editForm.stipendio_egp) || 0,
-        foto_url,
-      }).eq('id', editandoDipendente),
-      toast, 'la modifica del dipendente'
-    )
+    const { error } = await supabase.from('dipendenti').update({
+      nome: editForm.nome,
+      ruolo_lavoro: editForm.ruolo_lavoro || null,
+      data_inizio: editForm.data_inizio || null,
+      stipendio_eur: Number(editForm.stipendio_eur) || 0,
+      stipendio_egp: Number(editForm.stipendio_egp) || 0,
+      foto_url,
+    }).eq('id', editandoDipendente)
 
     setSalvandoEdit(false)
     if (!error) {
-      toast.success('Dipendente modificato.')
       setEditandoDipendente(null)
       carica()
+    } else {
+      alert('Errore nella modifica: ' + error.message)
     }
   }
 
