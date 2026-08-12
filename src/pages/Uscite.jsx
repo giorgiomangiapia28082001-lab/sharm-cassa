@@ -4,6 +4,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
 import { useTassi, tassiSicuri } from '../lib/tassi'
+import { caricaAllegato } from '../lib/foto'
 
 import { oggiLocale } from '../lib/date'
 
@@ -95,15 +96,9 @@ export default function Uscite() {
 
     let foto_url = null
     if (form.foto) {
-      const ext = form.foto.name.split('.').pop()
-      const path = `scontrini/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: uploadError } = await supabase.storage.from('foto').upload(path, form.foto)
-      if (!uploadError) {
-        const { data } = supabase.storage.from('foto').getPublicUrl(path)
-        foto_url = data.publicUrl
-      } else {
-        toast.warning('La foto non è stata caricata (controlla la connessione). L\'uscita verrà salvata senza foto.')
-      }
+      const { url, errore } = await caricaAllegato(form.foto, 'scontrini')
+      if (url) foto_url = url
+      else toast.warning(errore + ' L\'uscita verrà salvata senza foto.')
     }
 
     if (editandoId) {

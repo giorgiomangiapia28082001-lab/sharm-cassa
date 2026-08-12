@@ -27,6 +27,9 @@ export default function Cassa() {
   const [cambioForm, setCambioForm] = useState({ valuta_da: 'EUR', importo_da: '', valuta_a: 'EGP', importo_a: '', note: '' })
   const [prelievoForm, setPrelievoForm] = useState({ importo_pos: '', note: '' })
   const [versamentoForm, setVersamentoForm] = useState({ valuta: 'EUR', importo: '', note: '' })
+  // Date scelte per la chiusura del periodo (vuote = chiudi tutto come prima)
+  const [chiusuraDa, setChiusuraDa] = useState('')
+  const [chiusuraA, setChiusuraA] = useState('')
   const [salvandoVersamento, setSalvandoVersamento] = useState(false)
 
   const [periodoAperto, setPeriodoAperto] = useState(null)
@@ -194,7 +197,12 @@ export default function Cassa() {
   async function chiudiPeriodo() {
     setChiudendo(true)
     const { error } = await esegui(
-      supabase.rpc('chiudi_periodo_cassa', { p_note: noteChiusura || null, p_chiuso_da: profile.id }),
+      supabase.rpc('chiudi_periodo_cassa', {
+        p_note: noteChiusura || null,
+        p_chiuso_da: profile.id,
+        p_data_inizio: chiusuraDa || null,
+        p_data_fine: chiusuraA || null,
+      }),
       toast, 'la chiusura del periodo'
     )
     setChiudendo(false)
@@ -202,6 +210,8 @@ export default function Cassa() {
       toast.success('Periodo chiuso correttamente.')
       setMostraConfermaChiusura(false)
       setNoteChiusura('')
+      setChiusuraDa('')
+      setChiusuraA('')
       carica()
     }
   }
@@ -274,6 +284,27 @@ export default function Cassa() {
               <div className="stat-label">Saldo POS (LE)</div>
               <div className="stat-value">{Number(saldo.saldo_pos_egp).toFixed(0)} LE</div>
             </div>
+          </div>
+          <div style={{ background: 'var(--sabbia-chiara)', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Periodo da chiudere (facoltativo)</div>
+            <p style={{ fontSize: 12.5, color: 'var(--inchiostro-soft)', marginTop: 0, marginBottom: 10 }}>
+              Se lasci vuoto, viene chiuso tutto quello che c'è in cassa adesso. Se indichi le date, resta chiuso solo ciò che rientra in quei giorni: il resto passa al periodo nuovo.
+            </p>
+            <div className="form-grid">
+              <div className="field">
+                <label>Dal giorno</label>
+                <input type="date" value={chiusuraDa} onChange={(e) => setChiusuraDa(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Al giorno</label>
+                <input type="date" value={chiusuraA} onChange={(e) => setChiusuraA(e.target.value)} />
+              </div>
+            </div>
+            {(chiusuraDa || chiusuraA) && (
+              <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 8 }}>
+                ⚠️ Il saldo qui sopra si riferisce a tutto il periodo aperto. Dopo la chiusura, la fotografia salvata conterrà solo i giorni scelti.
+              </div>
+            )}
           </div>
           <div className="field" style={{ marginBottom: 14 }}>
             <label>Note (opzionale, es. "Chiusura giugno")</label>

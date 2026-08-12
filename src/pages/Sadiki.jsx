@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
+import { caricaAllegato } from '../lib/foto'
 import { oggiLocale, primoGiornoMeseLocale } from '../lib/date'
 
 const oggi = oggiLocale
@@ -96,16 +97,9 @@ export default function Sadiki() {
 
     // Upload foto se presente
     if (formProd.foto) {
-      const ext = formProd.foto.name.split('.').pop()
-      // Aggiungiamo una parte casuale al nome: due upload nello stesso
-      // millisecondo (o modifiche rapide) altrimenti userebbero lo stesso path
-      // e una foto sovrascriverebbe l'altra.
-      const path = `b2b/${clienteId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: upErr } = await supabase.storage.from('foto').upload(path, formProd.foto)
-      if (!upErr) {
-        const { data: urlData } = supabase.storage.from('foto').getPublicUrl(path)
-        foto_url = urlData.publicUrl
-      }
+      const { url, errore } = await caricaAllegato(formProd.foto, `b2b/${clienteId}`)
+      if (url) foto_url = url
+      else toast.warning(errore + ' La produzione verrà salvata senza foto.')
     }
 
     const payload = {
