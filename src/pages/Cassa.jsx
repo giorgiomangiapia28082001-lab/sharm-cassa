@@ -216,13 +216,21 @@ export default function Cassa() {
     }
   }
 
-  async function riapriPeriodo(id) {
-    if (!confirm('Riaprire questo periodo passato per correggerlo? Finché resta riaperto non potrai inserire nuovi incassi/uscite/movimenti: ricordati di richiuderlo subito dopo la correzione per tornare al periodo corrente.')) return
+  async function annullaChiusura(id) {
+    const quale = id ? 'questo periodo' : 'l\'ultima chiusura'
+    if (!confirm(
+      `Annullare ${quale}?\n\n` +
+      'Il periodo tornerà aperto e modificabile, e tutto quello che hai registrato dopo la chiusura ' +
+      'rientrerà in questo periodo. Non viene perso nessun dato.'
+    )) return
     setRiaprendo(true)
-    const { error } = await esegui(supabase.rpc('riapri_periodo_cassa', { p_periodo_id: id }), toast, 'la riapertura del periodo')
+    const { error } = await esegui(
+      supabase.rpc('annulla_chiusura_cassa', { p_periodo_id: id || null }),
+      toast, 'l\'annullamento della chiusura'
+    )
     setRiaprendo(false)
     if (!error) {
-      toast.success('Periodo riaperto.')
+      toast.success('Chiusura annullata: il periodo è di nuovo aperto e modificabile.')
       setMostraStorico(false)
       carica()
     }
@@ -258,6 +266,22 @@ export default function Cassa() {
             Le modifiche che fai ora (incassi, uscite, movimenti) appartengono a questo vecchio periodo, non al mese corrente. Richiudilo appena hai finito di correggerlo per tornare a lavorare sul periodo attuale.
           </p>
           <button className="btn btn-primary btn-sm" onClick={() => setMostraConfermaChiusura(true)}>Richiudi questo periodo</button>
+        </div>
+      )}
+
+      {isMaster && storicoPeriodi.length > 0 && (
+        <div className="card" style={{ marginBottom: 20, borderLeft: '3px solid var(--ambra, #d99a2b)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Hai chiuso un periodo per sbaglio?</div>
+              <div style={{ fontSize: 12.5, color: 'var(--inchiostro-soft)', marginTop: 3 }}>
+                Puoi tornare indietro: il periodo torna aperto e modificabile, senza perdere niente.
+              </div>
+            </div>
+            <button className="btn btn-ghost" disabled={riaprendo} onClick={() => annullaChiusura(null)}>
+              {riaprendo ? 'Attendi…' : '↩ Annulla ultima chiusura'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -353,7 +377,7 @@ export default function Cassa() {
                       <td style={{ color: 'var(--inchiostro-soft)' }}>{c.profiles?.nome || '—'}</td>
                       {isMaster && (
                         <td>
-                          <button className="btn btn-ghost btn-sm" disabled={!!periodoAperto && storicoPeriodi.find((p) => p.id === periodoAperto.id)} onClick={() => riapriPeriodo(c.id)}>
+                          <button className="btn btn-ghost btn-sm" disabled={riaprendo} onClick={() => annullaChiusura(c.id)}>
                             Riapri
                           </button>
                         </td>
