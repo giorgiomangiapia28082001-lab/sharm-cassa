@@ -10,7 +10,7 @@ import { oggiLocale } from '../lib/date'
 const oggi = oggiLocale
 
 export default function Soci() {
-  const { isMaster, profile } = useAuth()
+  const { isMaster, profile, puoInserire} = useAuth()
   const toast = useToast()
   const [soci, setSoci] = useState([])
   const [spese, setSpese] = useState([])
@@ -287,7 +287,7 @@ export default function Soci() {
               🔒 Chiudi periodo
             </button>
           )}
-          {isMaster && (
+          {puoInserire && (
             <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
               {mostraForm ? 'Nascondi modulo' : '+ Nuova spesa'}
             </button>
@@ -423,7 +423,7 @@ export default function Soci() {
         ))}
       </div>
 
-      {isMaster && mostraForm && (
+      {puoInserire && mostraForm && (
         <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
           {editandoId && (
             <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
@@ -539,7 +539,7 @@ export default function Soci() {
               Contanti messi dai soci. Restano solo qui: <strong>non entrano nella Cassa</strong>. Sarai tu a riportarli a mano in Cassa quando vorrai.
             </p>
           </div>
-          {isMaster && (
+          {puoInserire && (
             <button className="btn btn-primary" onClick={() => { if (mostraFormVers) annullaFormVers(); setMostraFormVers((v) => !v) }}>
               {mostraFormVers ? 'Annulla' : '+ Nuovo versamento'}
             </button>
@@ -559,7 +559,7 @@ export default function Soci() {
           </div>
         )}
 
-        {isMaster && mostraFormVers && (
+        {puoInserire && mostraFormVers && (
           <form onSubmit={salvaVersamento} className="card" style={{ margin: '16px 0' }}>
             <div className="form-grid">
               <div className="field">

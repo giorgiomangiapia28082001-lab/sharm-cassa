@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useToast } from '../lib/Toast'
+import { esegui, avvisaSeOffline } from '../lib/operazioni'
 
 import { oggiLocale, primoGiornoMeseLocale } from '../lib/date'
 
 const oggi = oggiLocale
 
 export default function Dipendenti() {
-  const { profile, isMaster, isViewer } = useAuth()
+  const { profile, isMaster, isViewer, puoInserire} = useAuth()
+  const toast = useToast()
   const [dipendenti, setDipendenti] = useState([])
   const [presenzeOggi, setPresenzeOggi] = useState({})
   const [mattineMese, setMattineMese] = useState({}) // dipendente_id → [date mattine del mese]
@@ -19,6 +22,13 @@ export default function Dipendenti() {
   const [dataSelezionata, setDataSelezionata] = useState(oggi())
   const [dipendenteAperto, setDipendenteAperto] = useState(null)
   const [dettaglioGiorniAperto, setDettaglioGiorniAperto] = useState(null)
+
+  // ── Riepilogo per periodo (giorni lavorati + acconti ricevuti) ──
+  const [mostraPeriodo, setMostraPeriodo] = useState(false)
+  const [periodoDa, setPeriodoDa] = useState(primoGiornoMeseLocale())
+  const [periodoA, setPeriodoA] = useState(oggi())
+  const [caricandoPeriodo, setCaricandoPeriodo] = useState(false)
+  const [riepilogoPeriodo, setRiepilogoPeriodo] = useState(null)
 
   // form nuovo dipendente (solo master)
   const [mostraNuovo, setMostraNuovo] = useState(false)
@@ -34,7 +44,7 @@ export default function Dipendenti() {
   const [editandoDipendente, setEditandoDipendente] = useState(null)
   const [salvandoEdit, setSalvandoEdit] = useState(false)
 
-  const puoSegnare = isMaster || profile?.ruolo === 'operatore'
+  const puoSegnare = puoInserire
 
   async function carica() {
     setLoading(true)
@@ -60,7 +70,10 @@ export default function Dipendenti() {
     const { data: acc } = await supabase.from('acconti').select('*').order('data', { ascending: false })
 
     // Recupera il periodo cassa aperto per filtrare gli acconti
-    const { data: periodoAperto } = await supabase.from('periodi_cassa').select('id').is('data_chiusura', null).single()
+    // maybeSingle(): subito dopo una chiusura periodo può non esistere nessun
+    // periodo aperto. Con single() la pagina Dipendenti andava in errore e gli
+    // acconti non si caricavano; con maybeSingle() otteniamo null e proseguiamo.
+    const { data: periodoAperto } = await supabase.from('periodi_cassa').select('id').is('data_chiusura', null).maybeSingle()
     const periodoCassaId = periodoAperto?.id || null
 
     const mapAcc = {}
@@ -90,7 +103,88 @@ export default function Dipendenti() {
     setLoading(false)
   }
 
-  useEffect(() => { carica() }, [dataSelezionata])
+  useEffect(() => { avvisaSeOffline(toast); carica() }, [dataSelezionata]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ────────────────────────────────────────────────────────────
+  // Riepilogo per periodo scelto: quanti giorni ha lavorato ciascun
+  // dipendente e quanto ha già ricevuto in acconti in quelle date.
+  // ────────────────────────────────────────────────────────────
+  async function calcolaPeriodo() {
+    if (!periodoDa || !periodoA) {
+      toast.warning('Scegli sia la data di inizio che quella di fine.')
+      return
+    }
+    if (periodoDa > periodoA) {
+      toast.warning('La data di inizio è successiva a quella di fine: controlla le date.')
+      return
+    }
+
+    setCaricandoPeriodo(true)
+    const [{ data: pres, error: errP }, { data: acc, error: errA }] = await Promise.all([
+      esegui(
+        supabase.from('presenze').select('dipendente_id, data, stato, mattina').gte('data', periodoDa).lte('data', periodoA),
+        toast, 'il caricamento delle presenze del periodo'
+      ),
+      esegui(
+        supabase.from('acconti').select('dipendente_id, data, importo_eur, importo_egp, erogato_da, note').gte('data', periodoDa).lte('data', periodoA),
+        toast, 'il caricamento degli acconti del periodo'
+      ),
+    ])
+    setCaricandoPeriodo(false)
+    if (errP || errA) return
+
+    // Conteggio giorni per dipendente
+    const mappa = {}
+    function riga(id) {
+      if (!mappa[id]) {
+        mappa[id] = { presenti: 0, parziali: 0, assenti: 0, mattine: 0, accEur: 0, accEgp: 0, acconti: [] }
+      }
+      return mappa[id]
+    }
+
+    ;(pres || []).forEach((p) => {
+      const r = riga(p.dipendente_id)
+      if (p.stato === 'presente') r.presenti++
+      else if (p.stato === 'parziale') r.parziali++
+      else if (p.stato === 'assente') r.assenti++
+      if (p.mattina) r.mattine++
+    })
+
+    ;(acc || []).forEach((a) => {
+      const r = riga(a.dipendente_id)
+      r.accEur += Number(a.importo_eur) || 0
+      r.accEgp += Number(a.importo_egp) || 0
+      r.acconti.push(a)
+    })
+
+    // Ordina gli acconti dal più recente
+    Object.values(mappa).forEach((r) => {
+      r.acconti.sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')))
+    })
+
+    setRiepilogoPeriodo({ da: periodoDa, a: periodoA, mappa })
+  }
+
+  // Scorciatoie comode per impostare il periodo
+  function impostaPeriodoRapido(quale) {
+    const adesso = new Date()
+    if (quale === 'mese_corrente') {
+      setPeriodoDa(primoGiornoMeseLocale())
+      setPeriodoA(oggi())
+    } else if (quale === 'mese_scorso') {
+      const primoScorso = new Date(adesso.getFullYear(), adesso.getMonth() - 1, 1)
+      const ultimoScorso = new Date(adesso.getFullYear(), adesso.getMonth(), 0)
+      const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      setPeriodoDa(fmt(primoScorso))
+      setPeriodoA(fmt(ultimoScorso))
+    } else if (quale === 'ultimi_30') {
+      const trentaFa = new Date(adesso.getTime() - 29 * 24 * 60 * 60 * 1000)
+      const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      setPeriodoDa(fmt(trentaFa))
+      setPeriodoA(oggi())
+    }
+    setRiepilogoPeriodo(null) // il risultato mostrato non vale più per le nuove date
+  }
 
   async function segnaPresenza(dipendenteId, stato, nomeDipendente) {
     if (!puoSegnare) return
@@ -103,14 +197,22 @@ export default function Dipendenti() {
         `${nomeDipendente}: stai cambiando da "${labelStato[esistente.stato]}" a "${labelStato[stato]}". Confermi?`
       )
       if (!conferma) return
-      await supabase.from('presenze').update({ stato }).eq('id', esistente.id)
+      const { error } = await esegui(
+        supabase.from('presenze').update({ stato }).eq('id', esistente.id),
+        toast, 'il salvataggio della presenza'
+      )
+      if (error) return
     } else {
-      await supabase.from('presenze').insert({
-        dipendente_id: dipendenteId,
-        data: dataSelezionata,
-        stato,
-        inserito_da: profile.id,
-      })
+      const { error } = await esegui(
+        supabase.from('presenze').insert({
+          dipendente_id: dipendenteId,
+          data: dataSelezionata,
+          stato,
+          inserito_da: profile.id,
+        }),
+        toast, 'il salvataggio della presenza'
+      )
+      if (error) return
     }
     carica()
   }
@@ -119,16 +221,24 @@ export default function Dipendenti() {
     if (!puoSegnare) return
     const esistente = presenzeOggi[dipendenteId]
     if (esistente) {
-      await supabase.from('presenze').update({ mattina: !esistente.mattina }).eq('id', esistente.id)
+      const { error } = await esegui(
+        supabase.from('presenze').update({ mattina: !esistente.mattina }).eq('id', esistente.id),
+        toast, 'il salvataggio del turno mattina'
+      )
+      if (error) return
     } else {
       // Crea la riga presenza con solo mattina (senza stato sera)
-      await supabase.from('presenze').insert({
-        dipendente_id: dipendenteId,
-        data: dataSelezionata,
-        stato: 'assente', // sera non segnata
-        mattina: true,
-        inserito_da: profile.id,
-      })
+      const { error } = await esegui(
+        supabase.from('presenze').insert({
+          dipendente_id: dipendenteId,
+          data: dataSelezionata,
+          stato: 'assente', // sera non segnata
+          mattina: true,
+          inserito_da: profile.id,
+        }),
+        toast, 'il salvataggio del turno mattina'
+      )
+      if (error) return
     }
     carica()
   }
@@ -166,72 +276,71 @@ export default function Dipendenti() {
       }
     }
 
-    const { data: inserted, error } = await supabase.from('dipendenti').insert({
-      nome: nuovo.nome,
-      ruolo_lavoro: nuovo.ruolo_lavoro || null,
-      data_inizio: nuovo.data_inizio || null,
-      stipendio_eur: Number(nuovo.stipendio_eur) || 0,
-      stipendio_egp: Number(nuovo.stipendio_egp) || 0,
-      foto_url,
-    }).select()
-    if (error) { setSalvandoNuovo(false); alert('Errore salvataggio: ' + error.message); return }
+    const { error } = await esegui(
+      supabase.from('dipendenti').insert({
+        nome: nuovo.nome,
+        ruolo_lavoro: nuovo.ruolo_lavoro || null,
+        data_inizio: nuovo.data_inizio || null,
+        stipendio_eur: Number(nuovo.stipendio_eur) || 0,
+        stipendio_egp: Number(nuovo.stipendio_egp) || 0,
+        foto_url,
+      }),
+      toast, 'il salvataggio del dipendente'
+    )
     setSalvandoNuovo(false)
     if (!error) {
+      toast.success('Dipendente aggiunto.')
       setNuovo({ nome: '', ruolo_lavoro: '', data_inizio: '', stipendio_eur: '', stipendio_egp: '', foto: null })
       setMostraNuovo(false)
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
   async function salvaAcconto(dipendenteId) {
     setSalvandoAcconto(true)
-    const { error } = await supabase.from('acconti').insert({
-      dipendente_id: dipendenteId,
-      data: oggi(),
-      importo_eur: Number(accontoForm.importo_eur) || 0,
-      importo_egp: Number(accontoForm.importo_egp) || 0,
-      note: accontoForm.note || null,
-      erogato_da: accontoForm.erogato_da || 'direttore',
-      inserito_da: profile.id,
-    })
+    const { error } = await esegui(
+      supabase.from('acconti').insert({
+        dipendente_id: dipendenteId,
+        data: oggi(),
+        importo_eur: Number(accontoForm.importo_eur) || 0,
+        importo_egp: Number(accontoForm.importo_egp) || 0,
+        note: accontoForm.note || null,
+        erogato_da: accontoForm.erogato_da || 'direttore',
+        inserito_da: profile.id,
+      }),
+      toast, 'il salvataggio dell\'acconto'
+    )
     setSalvandoAcconto(false)
     if (!error) {
+      toast.success('Acconto registrato.')
       setAccontoForm({ importo_eur: '', importo_egp: '', note: '', erogato_da: 'direttore' })
       carica()
-    } else {
-      alert('Errore: ' + error.message)
     }
   }
 
   async function terminaRapporto(d) {
     if (!confirm(`Terminare il rapporto di lavoro con ${d.nome}? Il dipendente verrà spostato tra gli ex dipendenti. I dati storici (presenze, acconti) restano conservati.`)) return
-    const { error } = await supabase.from('dipendenti').update({ attivo: false }).eq('id', d.id)
-    if (error) alert('Errore: ' + error.message)
-    else { setDipendenteAperto(null); carica() }
+    const { error } = await esegui(supabase.from('dipendenti').update({ attivo: false }).eq('id', d.id), toast, 'la fine del rapporto')
+    if (!error) { toast.success('Rapporto terminato.'); setDipendenteAperto(null); carica() }
   }
 
   async function riassumi(d) {
     if (!confirm(`Riassumere ${d.nome}? Il dipendente tornerà nella lista attiva.`)) return
-    const { error } = await supabase.from('dipendenti').update({ attivo: true }).eq('id', d.id)
-    if (error) alert('Errore: ' + error.message)
-    else carica()
+    const { error } = await esegui(supabase.from('dipendenti').update({ attivo: true }).eq('id', d.id), toast, 'la riassunzione')
+    if (!error) { toast.success('Dipendente riassunto.'); carica() }
   }
 
   async function eliminaDipendente(d) {
     if (!confirm(`ELIMINAZIONE DEFINITIVA di ${d.nome}.\n\nATTENZIONE: verranno eliminati anche tutti i suoi dati storici (presenze, acconti, stipendi). Questa azione non può essere annullata.\n\nContinuare?`)) return
     if (!confirm(`Sei sicuro? Tutti i dati di ${d.nome} verranno cancellati per sempre.`)) return
-    const { error } = await supabase.from('dipendenti').delete().eq('id', d.id)
-    if (error) alert('Errore: ' + error.message)
-    else { setDipendenteAperto(null); carica() }
+    const { error } = await esegui(supabase.from('dipendenti').delete().eq('id', d.id), toast, 'l\'eliminazione del dipendente')
+    if (!error) { toast.success('Dipendente eliminato.'); setDipendenteAperto(null); carica() }
   }
 
   async function eliminaAcconto(id, nomeDip) {
     if (!confirm(`Eliminare questo acconto di ${nomeDip}? Verrà rimossa anche la relativa voce dalle Uscite.`)) return
-    const { error } = await supabase.from('acconti').delete().eq('id', id)
-    if (error) alert('Errore: ' + error.message)
-    else carica()
+    const { error } = await esegui(supabase.from('acconti').delete().eq('id', id), toast, 'l\'eliminazione dell\'acconto')
+    if (!error) { toast.success('Acconto eliminato.'); carica() }
   }
 
   function apriModifica(d) {
@@ -260,21 +369,23 @@ export default function Dipendenti() {
       }
     }
 
-    const { error } = await supabase.from('dipendenti').update({
-      nome: editForm.nome,
-      ruolo_lavoro: editForm.ruolo_lavoro || null,
-      data_inizio: editForm.data_inizio || null,
-      stipendio_eur: Number(editForm.stipendio_eur) || 0,
-      stipendio_egp: Number(editForm.stipendio_egp) || 0,
-      foto_url,
-    }).eq('id', editandoDipendente)
+    const { error } = await esegui(
+      supabase.from('dipendenti').update({
+        nome: editForm.nome,
+        ruolo_lavoro: editForm.ruolo_lavoro || null,
+        data_inizio: editForm.data_inizio || null,
+        stipendio_eur: Number(editForm.stipendio_eur) || 0,
+        stipendio_egp: Number(editForm.stipendio_egp) || 0,
+        foto_url,
+      }).eq('id', editandoDipendente),
+      toast, 'la modifica del dipendente'
+    )
 
     setSalvandoEdit(false)
     if (!error) {
+      toast.success('Dipendente modificato.')
       setEditandoDipendente(null)
       carica()
-    } else {
-      alert('Errore nella modifica: ' + error.message)
     }
   }
 
@@ -287,6 +398,9 @@ export default function Dipendenti() {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <input type="date" value={dataSelezionata} onChange={(e) => setDataSelezionata(e.target.value)} style={{ padding: '9px 12px', borderRadius: 6, border: '1px solid var(--linea)' }} />
+          <button className="btn btn-ghost" onClick={() => setMostraPeriodo((v) => !v)}>
+            {mostraPeriodo ? '✕ Chiudi riepilogo' : '📅 Riepilogo periodo'}
+          </button>
           <button className="btn btn-ghost" onClick={() => setMostraExDipendenti((v) => !v)}>
             {mostraExDipendenti ? 'Mostra attivi' : 'Ex dipendenti'}
           </button>
@@ -298,7 +412,147 @@ export default function Dipendenti() {
         </div>
       </div>
 
-      {isMaster && mostraNuovo && (
+      {mostraPeriodo && (
+        <div className="card" style={{ marginBottom: 28 }}>
+          <h3 style={{ fontSize: 15, marginBottom: 6 }}>Riepilogo per periodo</h3>
+          <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginTop: 0, marginBottom: 14 }}>
+            Scegli due date: per ogni dipendente vedrai i giorni lavorati e quanto ha già ricevuto in acconti in quel periodo.
+          </p>
+
+          <div className="form-grid">
+            <div className="field">
+              <label>Dal giorno</label>
+              <input type="date" value={periodoDa} onChange={(e) => { setPeriodoDa(e.target.value); setRiepilogoPeriodo(null) }} />
+            </div>
+            <div className="field">
+              <label>Al giorno</label>
+              <input type="date" value={periodoA} onChange={(e) => { setPeriodoA(e.target.value); setRiepilogoPeriodo(null) }} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '14px 0' }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => impostaPeriodoRapido('mese_corrente')}>Mese corrente</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => impostaPeriodoRapido('mese_scorso')}>Mese scorso</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => impostaPeriodoRapido('ultimi_30')}>Ultimi 30 giorni</button>
+          </div>
+
+          <button className="btn btn-accent" onClick={calcolaPeriodo} disabled={caricandoPeriodo}>
+            {caricandoPeriodo ? 'Calcolo in corso…' : 'Calcola'}
+          </button>
+
+          {riepilogoPeriodo && (() => {
+            const lista = dipendenti.filter((d) => (mostraExDipendenti ? !d.attivo : d.attivo))
+            const vuoto = { presenti: 0, parziali: 0, assenti: 0, mattine: 0, accEur: 0, accEgp: 0, acconti: [] }
+
+            // Totali generali del periodo
+            const totali = lista.reduce((acc, d) => {
+              const r = riepilogoPeriodo.mappa[d.id] || vuoto
+              acc.eur += r.accEur
+              acc.egp += r.accEgp
+              acc.giorni += r.presenti + r.parziali * 0.5
+              return acc
+            }, { eur: 0, egp: 0, giorni: 0 })
+
+            return (
+              <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--linea)' }}>
+                <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginBottom: 14 }}>
+                  Periodo: <strong>{new Date(riepilogoPeriodo.da + 'T12:00:00').toLocaleDateString('it-IT')}</strong> — <strong>{new Date(riepilogoPeriodo.a + 'T12:00:00').toLocaleDateString('it-IT')}</strong>
+                </div>
+
+                {/* Totale complessivo */}
+                <div className="stats-grid" style={{ marginBottom: 18 }}>
+                  <div className="stat-card">
+                    <div className="stat-label">Giorni lavorati (tutti)</div>
+                    <div className="stat-value">{totali.giorni % 1 === 0 ? totali.giorni : totali.giorni.toFixed(1)}</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Acconti dati (EUR)</div>
+                    <div className="stat-value">€ {totali.eur.toFixed(2)}</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Acconti dati (LE)</div>
+                    <div className="stat-value">{totali.egp.toFixed(0)} LE</div>
+                  </div>
+                </div>
+
+                {/* Riga per dipendente */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {lista.map((d) => {
+                    const r = riepilogoPeriodo.mappa[d.id] || vuoto
+                    const giorniEquivalenti = r.presenti + r.parziali * 0.5
+                    const nessunDato = r.presenti === 0 && r.parziali === 0 && r.assenti === 0 && r.accEur === 0 && r.accEgp === 0
+
+                    return (
+                      <div key={d.id} className="card" style={{ padding: '12px 14px', background: nessunDato ? 'transparent' : 'var(--sabbia-chiara)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 15 }}>{d.nome}</div>
+                            {nessunDato ? (
+                              <div style={{ fontSize: 12.5, color: 'var(--inchiostro-soft)', marginTop: 4 }}>
+                                Nessuna presenza né acconto in questo periodo.
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 12.5, color: 'var(--inchiostro-soft)', marginTop: 4 }}>
+                                ✓ {r.presenti} present{r.presenti === 1 ? 'e' : 'i'}
+                                {r.parziali > 0 && <> · ½ {r.parziali} parzial{r.parziali === 1 ? 'e' : 'i'}</>}
+                                {r.assenti > 0 && <> · ✕ {r.assenti} assent{r.assenti === 1 ? 'e' : 'i'}</>}
+                                {r.mattine > 0 && <> · ☀ {r.mattine} mattin{r.mattine === 1 ? 'a' : 'e'}</>}
+                              </div>
+                            )}
+                          </div>
+
+                          {!nessunDato && (
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)' }}>Giorni lavorati</div>
+                              <div style={{ fontWeight: 800, fontSize: 18 }}>
+                                {giorniEquivalenti % 1 === 0 ? giorniEquivalenti : giorniEquivalenti.toFixed(1)}
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginTop: 6 }}>Già ricevuto</div>
+                              {r.accEur > 0 && <div style={{ fontWeight: 700, color: 'var(--corallo)' }}>€ {r.accEur.toFixed(2)}</div>}
+                              {r.accEgp > 0 && <div style={{ fontWeight: 700, color: 'var(--corallo)' }}>{r.accEgp.toFixed(0)} LE</div>}
+                              {r.accEur === 0 && r.accEgp === 0 && <div style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>—</div>}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Dettaglio acconti del periodo */}
+                        {r.acconti.length > 0 && (
+                          <details style={{ marginTop: 10 }}>
+                            <summary style={{ cursor: 'pointer', fontSize: 12.5, color: 'var(--inchiostro-soft)' }}>
+                              Vedi i {r.acconti.length} acconti del periodo
+                            </summary>
+                            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {r.acconti.map((a, i) => (
+                                <div key={i} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', gap: 8, borderTop: '1px solid var(--linea)', paddingTop: 6 }}>
+                                  <span style={{ color: 'var(--inchiostro-soft)' }}>
+                                    {new Date(a.data + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+                                    {a.erogato_da && <> · {a.erogato_da}</>}
+                                    {a.note && <> · {a.note}</>}
+                                  </span>
+                                  <strong style={{ flexShrink: 0 }}>
+                                    {Number(a.importo_eur) > 0 && <>€ {Number(a.importo_eur).toFixed(2)} </>}
+                                    {Number(a.importo_egp) > 0 && <>{Number(a.importo_egp).toFixed(0)} LE</>}
+                                  </strong>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <p style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 14, marginBottom: 0 }}>
+                  I giorni parziali contano come mezza giornata. I turni mattina sono indicati a parte e non aumentano il conteggio dei giorni.
+                </p>
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
+      {puoInserire && mostraNuovo && (
         <form onSubmit={salvaNuovoDipendente} className="card" style={{ marginBottom: 28 }}>
           <div className="form-grid">
             <div className="field">

@@ -21,7 +21,7 @@ const VUOTO = {
 }
 
 export default function Uscite() {
-  const { profile, isMaster, isViewer } = useAuth()
+  const { profile, isMaster, isViewer, puoInserire} = useAuth()
   const toast = useToast()
   const { tassi } = useTassi()
   const [righe, setRighe] = useState([])
@@ -160,7 +160,6 @@ export default function Uscite() {
     }
   }
 
-  const puoInserire = isMaster || profile?.ruolo === 'operatore'
   const righeFiltrate = righe
     .filter((r) => !filtroCategoria || r.categoria_id === filtroCategoria)
     .filter((r) => !filtroMetodo || (r.metodo_pagamento || 'contanti') === filtroMetodo)

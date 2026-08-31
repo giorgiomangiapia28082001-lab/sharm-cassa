@@ -11,7 +11,7 @@ const TIPO_LABEL = {
 }
 
 export default function SpeseFisse() {
-  const { profile, isMaster } = useAuth()
+  const { profile, isMaster, puoInserire} = useAuth()
   const toast = useToast()
   const [voci, setVoci] = useState([])
   const [pagamenti, setPagamenti] = useState([])
@@ -131,14 +131,14 @@ export default function SpeseFisse() {
           <h1 className="page-title">Spese fisse</h1>
           <p className="page-subtitle">Fitto del locale e case dei dipendenti — voci ricorrenti, da segnare come pagate ogni mese.</p>
         </div>
-        {isMaster && (
+        {puoInserire && (
           <button className="btn btn-primary" onClick={() => { if (mostraForm) annullaForm(); setMostraForm((v) => !v) }}>
             {mostraForm ? 'Nascondi modulo' : '+ Nuova voce fissa'}
           </button>
         )}
       </div>
 
-      {isMaster && mostraForm && (
+      {puoInserire && mostraForm && (
         <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
           {editandoId && (
             <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>

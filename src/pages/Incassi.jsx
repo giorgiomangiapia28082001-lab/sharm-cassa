@@ -25,7 +25,7 @@ const VUOTO = {
 }
 
 export default function Incassi() {
-  const { profile, isMaster, isViewer } = useAuth()
+  const { profile, isMaster, isViewer, puoInserire} = useAuth()
   const toast = useToast()
   const [righe, setRighe] = useState([])
   const [form, setForm] = useState(VUOTO)
@@ -156,7 +156,6 @@ export default function Incassi() {
     }
   }
 
-  const puoInserire = isMaster || profile?.ruolo === 'operatore'
 
   // Calcolo pesante (sort + fondo cassa giorno precedente) fatto una sola
   // volta per ogni cambio di dati, invece che ad ogni render della pagina.

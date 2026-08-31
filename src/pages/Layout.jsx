@@ -2,15 +2,15 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 
 const NAV_ITEMS = [
-  { to: '/', icon: '◈', label: 'Riepilogo', roles: ['master', 'operatore', 'viewer'] },
-  { to: '/cassa', icon: '◫', label: 'Cassa', roles: ['master', 'operatore', 'viewer'] },
-  { to: '/incassi', icon: '€', label: 'Incassi serata', roles: ['master', 'operatore', 'viewer'] },
-  { to: '/chioschetto', icon: '☕', label: 'Chioschetto', roles: ['master', 'operatore', 'viewer'] },
-  { to: '/uscite', icon: '↓', label: 'Uscite', roles: ['master', 'operatore', 'viewer'] },
-  { to: '/spese-fisse', icon: '⏲', label: 'Spese fisse', roles: ['master', 'operatore', 'viewer'] },
-  { to: '/dipendenti', icon: '◐', label: 'Dipendenti', roles: ['master', 'operatore', 'viewer'] },
-  { to: '/sadiki', icon: '◧', label: 'Sadiki', roles: ['master', 'operatore', 'viewer'] },
-  { to: '/soci', icon: '◆', label: 'Spese soci', roles: ['master', 'viewer'] },
+  { to: '/', icon: '◈', label: 'Riepilogo', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/cassa', icon: '◫', label: 'Cassa', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/incassi', icon: '€', label: 'Incassi serata', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/chioschetto', icon: '☕', label: 'Chioschetto', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/uscite', icon: '↓', label: 'Uscite', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/spese-fisse', icon: '⏲', label: 'Spese fisse', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/dipendenti', icon: '◐', label: 'Dipendenti', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/sadiki', icon: '◧', label: 'Sadiki', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/soci', icon: '◆', label: 'Spese soci', roles: ['master', 'viewer', 'proprietario'] },
   { to: '/impostazioni', icon: '⚙', label: 'Impostazioni', roles: ['master'] },
 ]
 

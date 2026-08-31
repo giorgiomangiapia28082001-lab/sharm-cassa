@@ -13,9 +13,8 @@ const fmt = (n) => Number(n || 0).toFixed(2)
 const fmtKg = (n) => Number(n || 0).toFixed(3).replace('.', ',')
 
 export default function Sadiki() {
-  const { profile, isMaster } = useAuth()
+  const { profile, isMaster, puoInserire} = useAuth()
   const toast = useToast()
-  const puoInserire = isMaster || profile?.ruolo === 'operatore'
 
   const [clienti, setClienti] = useState([])
   const [clienteId, setClienteId] = useState(null)

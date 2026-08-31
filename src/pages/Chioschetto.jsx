@@ -18,7 +18,7 @@ const VUOTO = {
 }
 
 export default function Chioschetto() {
-  const { profile, isMaster, isViewer } = useAuth()
+  const { profile, isMaster, isViewer, puoInserire} = useAuth()
   const toast = useToast()
   const [righe, setRighe] = useState([])
   const [form, setForm] = useState(VUOTO)
@@ -113,7 +113,6 @@ export default function Chioschetto() {
     }
   }
 
-  const puoInserire = isMaster || profile?.ruolo === 'operatore'
 
   const righeOrdinate = useMemo(() => {
     return [...righe].sort((a, b) => confrontaStringhe(b.created_at, a.created_at))
