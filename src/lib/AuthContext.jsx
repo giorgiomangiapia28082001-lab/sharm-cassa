@@ -56,6 +56,10 @@ export function AuthProvider({ children }) {
     isMaster: profile?.ruolo === 'master',
     isOperatore: profile?.ruolo === 'operatore',
     isViewer: profile?.ruolo === 'viewer',
+    isProprietario: profile?.ruolo === 'proprietario',
+    // Chi può AGGIUNGERE dati (ma non per forza modificarli):
+    // master, operatore e proprietario. Il viewer no.
+    puoInserire: ['master', 'operatore', 'proprietario'].includes(profile?.ruolo),
     signIn,
     signOut,
   }
