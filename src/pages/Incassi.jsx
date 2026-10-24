@@ -5,8 +5,10 @@ import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
 import { controllaPrezzoPersona } from '../lib/anomalie'
 import ConfermaAnomalia from '../lib/ConfermaAnomalia'
+import { usePeriodoScelto, SceltaPeriodo, AvvisoArchivio, filtraPeriodo } from '../lib/periodi'
 
-import { oggiLocale, confrontaStringhe } from '../lib/date'
+import { oggiLocale } from '../lib/date'
+import { conFondoIeri } from '../lib/calcoli'
 
 const oggi = oggiLocale
 
@@ -27,6 +29,7 @@ const VUOTO = {
 export default function Incassi() {
   const { profile, isMaster, isViewer, puoInserire} = useAuth()
   const toast = useToast()
+  const per = usePeriodoScelto()
   const [righe, setRighe] = useState([])
   const [form, setForm] = useState(VUOTO)
   const [loading, setLoading] = useState(true)
@@ -42,7 +45,7 @@ export default function Incassi() {
     setLoading(true)
     const [{ data, error }, { data: t, error: errT }] = await Promise.all([
       esegui(
-        supabase.from('incassi').select('*, profiles:inserito_da(nome)').order('data', { ascending: false }).limit(60),
+        filtraPeriodo(supabase.from('incassi').select('*, profiles:inserito_da(nome)'), per.periodo).order('data', { ascending: false }),
         toast,
         'il caricamento dello storico incassi'
       ),
@@ -59,8 +62,13 @@ export default function Incassi() {
 
   useEffect(() => {
     avvisaSeOffline(toast)
-    carica()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!per.caricato) return
+    annullaForm()
+    carica()
+  }, [per.caricato, per.periodo?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function update(campo, valore) {
     setForm((f) => ({ ...f, [campo]: valore }))
@@ -160,10 +168,7 @@ export default function Incassi() {
   // Calcolo pesante (sort + fondo cassa giorno precedente) fatto una sola
   // volta per ogni cambio di dati, invece che ad ogni render della pagina.
   const righeConFondoIeri = useMemo(() => {
-    return [...righe]
-      .sort((a, b) => confrontaStringhe(a.created_at, b.created_at))
-      .map((r, i, arr) => ({ r, fondoIeri: i > 0 ? Number(arr[i - 1].fondo_cassa) : 0 }))
-      .reverse()
+    return conFondoIeri(righe).reverse()
   }, [righe])
 
   return (
@@ -173,14 +178,19 @@ export default function Incassi() {
           <h1 className="page-title">Incassi serata</h1>
           <p className="page-subtitle">Registra l'incasso di sala e il delivery di ogni serata, diviso per valuta.</p>
         </div>
-        {puoInserire && (
-          <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
-            {mostraForm ? 'Nascondi modulo' : '+ Nuovo incasso'}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <SceltaPeriodo periodi={per.periodi} periodo={per.periodo} onChange={per.scegli} />
+          {puoInserire && !per.inArchivio && (
+            <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
+              {mostraForm ? 'Nascondi modulo' : '+ Nuovo incasso'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {puoInserire && mostraForm && (
+      <AvvisoArchivio periodo={per.periodo} onTornaAlCorrente={() => per.scegli(null)} />
+
+      {puoInserire && mostraForm && (!per.inArchivio || editandoId) && (
         <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
           {editandoId && (
             <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
@@ -272,14 +282,14 @@ export default function Incassi() {
         </form>
       )}
 
-      <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Storico</h3>
+      <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Incassi del periodo</h3>
 
       {loading ? (
         <p className="page-subtitle">Caricamento…</p>
       ) : righe.length === 0 ? (
         <div className="empty-state card">
-          <div className="empty-state-title">Nessun incasso registrato</div>
-          <p>Quando inserisci il primo incasso, apparirà qui.</p>
+          <div className="empty-state-title">Nessun incasso in questo periodo</div>
+          <p>{per.inArchivio ? 'In questo periodo non era stato registrato nessun incasso.' : 'Quando inserisci il primo incasso del periodo, apparirà qui.'}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { filtraPeriodo, etichettaPeriodo } from '../lib/periodi'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
@@ -37,7 +39,6 @@ export default function Cassa() {
   const [mostraConfermaChiusura, setMostraConfermaChiusura] = useState(false)
   const [noteChiusura, setNoteChiusura] = useState('')
   const [chiudendo, setChiudendo] = useState(false)
-  const [mostraStorico, setMostraStorico] = useState(false)
   const [riaprendo, setRiaprendo] = useState(false)
   const [editMovimento, setEditMovimento] = useState(null) // { id, tipo, importo_pos, importo_da, importo_a, valuta_da, valuta_a, note, data }
 
@@ -45,7 +46,6 @@ export default function Cassa() {
     setLoading(true)
     const [
       { data: s, error: errS },
-      { data: m, error: errM },
       { data: pAperto, error: errP },
       { data: pStorico, error: errPs },
       { data: t, error: errT },
@@ -53,11 +53,17 @@ export default function Cassa() {
       // maybeSingle() invece di single(): se non c'è ancora nessuna riga
       // (es. cassa mai inizializzata) non deve far esplodere la pagina.
       esegui(supabase.from('saldo_cassa_attuale').select('*').maybeSingle(), toast, 'il caricamento del saldo cassa'),
-      esegui(supabase.from('movimenti_cassa').select('*, profiles:inserito_da(nome)').order('data', { ascending: false }).order('created_at', { ascending: false }).limit(30), toast, 'il caricamento dei movimenti'),
       esegui(supabase.from('periodi_cassa').select('*').is('data_chiusura', null).maybeSingle(), toast, 'il caricamento del periodo aperto'),
       esegui(supabase.from('periodi_cassa').select('*, profiles:chiuso_da(nome)').not('data_chiusura', 'is', null).order('data_chiusura', { ascending: false }), toast, 'il caricamento dello storico periodi'),
       esegui(supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1), toast, 'il caricamento dei tassi di cambio'),
     ])
+    // Come il saldo, anche i movimenti mostrati sono solo quelli del periodo
+    // in corso: quelli dei periodi chiusi si trovano in Archivio.
+    const { data: m, error: errM } = await esegui(
+      filtraPeriodo(supabase.from('movimenti_cassa').select('*, profiles:inserito_da(nome)'), pAperto)
+        .order('data', { ascending: false }).order('created_at', { ascending: false }),
+      toast, 'il caricamento dei movimenti'
+    )
     if (!errS) setSaldo(s)
     if (!errM) setMovimenti(m || [])
     if (!errP) setPeriodoAperto(pAperto || null)
@@ -137,10 +143,8 @@ export default function Cassa() {
   }
 
   async function eliminaMovimento(m) {
-    if (m.tipo === 'incasso_b2b') {
-      toast.warning('Questo movimento proviene da un pagamento Sadiki. Per eliminarlo, vai nella sezione Sadiki ed elimina il pagamento da lì.')
-      return
-    }
+    // Gli incassi Sadiki (sezione tolta a ottobre 2026) restano movimenti
+    // normali: si eliminano da qui come gli altri.
     if (!confirm('Eliminare questo movimento? Il saldo verrà ricalcolato.')) return
     const { error } = await esegui(supabase.from('movimenti_cassa').delete().eq('id', m.id), toast, 'l\'eliminazione del movimento')
     if (!error) {
@@ -231,7 +235,6 @@ export default function Cassa() {
     setRiaprendo(false)
     if (!error) {
       toast.success('Chiusura annullata: il periodo è di nuovo aperto e modificabile.')
-      setMostraStorico(false)
       carica()
     }
   }
@@ -245,29 +248,19 @@ export default function Cassa() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Cassa</h1>
-          <p className="page-subtitle">Saldo dall'ultima chiusura periodo, da confrontare con quanto ha in mano il direttore.</p>
+          <p className="page-subtitle">
+            Saldo del periodo in corso{periodoAperto ? ` (${etichettaPeriodo(periodoAperto)})` : ''}, da confrontare con quanto ha in mano il direttore.
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button className="btn btn-ghost" onClick={() => setMostraStorico((v) => !v)}>
-            {mostraStorico ? '✕ Chiudi storico' : 'Storico periodi'}
-          </button>
-          {isMaster && !(periodoAperto && storicoPeriodi.find((p) => p.id === periodoAperto.id)) && (
+          <Link className="btn btn-ghost" to="/archivio">📁 Archivio periodi</Link>
+          {isMaster && (
             <button className="btn btn-primary" onClick={() => setMostraConfermaChiusura(true)}>
               🔒 Chiudi periodo
             </button>
           )}
         </div>
       </div>
-
-      {isMaster && periodoAperto && storicoPeriodi.find((p) => p.id === periodoAperto.id) && (
-        <div className="card" style={{ marginBottom: 24, borderLeft: '3px solid var(--corallo)', background: 'rgba(217,104,79,0.06)' }}>
-          <strong style={{ color: 'var(--corallo)' }}>⚠️ Stai lavorando su un periodo passato riaperto</strong>
-          <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)', margin: '6px 0 12px' }}>
-            Le modifiche che fai ora (incassi, uscite, movimenti) appartengono a questo vecchio periodo, non al mese corrente. Richiudilo appena hai finito di correggerlo per tornare a lavorare sul periodo attuale.
-          </p>
-          <button className="btn btn-primary btn-sm" onClick={() => setMostraConfermaChiusura(true)}>Richiudi questo periodo</button>
-        </div>
-      )}
 
       {isMaster && storicoPeriodi.length > 0 && (
         <div className="card" style={{ marginBottom: 20, borderLeft: '3px solid var(--ambra, #d99a2b)' }}>
@@ -289,7 +282,8 @@ export default function Cassa() {
         <div className="card" style={{ marginBottom: 24, borderLeft: '3px solid var(--corallo)' }}>
           <h3 style={{ fontSize: 15, marginBottom: 10, color: 'var(--corallo)' }}>Conferma chiusura periodo</h3>
           <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginBottom: 14 }}>
-            Verrà salvato come storico il saldo attuale, poi la Cassa ripartirà da 0. Questa azione non elimina nessun incasso o uscita: serve solo a "fotografare" il saldo di oggi come riferimento.
+            Il periodo viene chiuso e messo in <strong>Archivio</strong> con il suo riepilogo, e da qui in poi cassa, incassi, uscite e movimenti ripartono da 0 in un periodo nuovo.
+            Non si cancella niente: dall'Archivio puoi riaprire la cartella del periodo, controllarlo e correggere le voci.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 14 }}>
             <div className="stat-card" style={{ padding: '10px 12px' }}>
@@ -340,54 +334,6 @@ export default function Cassa() {
             </button>
             <button className="btn btn-ghost" onClick={() => setMostraConfermaChiusura(false)}>Annulla</button>
           </div>
-        </div>
-      )}
-
-      {mostraStorico && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <h3 style={{ fontSize: 15, marginBottom: 14 }}>Storico periodi chiusi</h3>
-          {storicoPeriodi.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)' }}>Nessun periodo chiuso finora.</p>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Periodo</th>
-                    <th>Chiuso il</th>
-                    <th>Contanti €</th>
-                    <th>Contanti LE</th>
-                    <th>Contanti $</th>
-                    <th>Saldo POS</th>
-                    <th>Note</th>
-                    <th>Chiuso da</th>
-                    {isMaster && <th></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {storicoPeriodi.map((c) => (
-                    <tr key={c.id}>
-                      <td>#{c.numero}</td>
-                      <td>{new Date(c.data_chiusura).toLocaleDateString('it-IT')}</td>
-                      <td>€ {Number(c.contanti_eur).toFixed(2)}</td>
-                      <td>{Number(c.contanti_egp).toFixed(0)} LE</td>
-                      <td>$ {Number(c.contanti_usd).toFixed(2)}</td>
-                      <td>{Number(c.saldo_pos_egp).toFixed(0)} LE</td>
-                      <td style={{ color: 'var(--inchiostro-soft)' }}>{c.note || '—'}</td>
-                      <td style={{ color: 'var(--inchiostro-soft)' }}>{c.profiles?.nome || '—'}</td>
-                      {isMaster && (
-                        <td>
-                          <button className="btn btn-ghost btn-sm" disabled={riaprendo} onClick={() => annullaChiusura(c.id)}>
-                            Riapri
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       )}
 
@@ -511,10 +457,10 @@ export default function Cassa() {
 
       </div>
 
-      <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Movimenti recenti</h3>
+      <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Movimenti del periodo</h3>
       {movimenti.length === 0 ? (
         <div className="empty-state card">
-          <div className="empty-state-title">Nessun movimento registrato</div>
+          <div className="empty-state-title">Nessun movimento in questo periodo</div>
           <p>Cambi valuta, prelievi POS e versamenti appariranno qui.</p>
         </div>
       ) : (

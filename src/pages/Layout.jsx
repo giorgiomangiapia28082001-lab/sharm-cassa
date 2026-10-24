@@ -4,12 +4,12 @@ import { useAuth } from '../lib/AuthContext'
 const NAV_ITEMS = [
   { to: '/', icon: '◈', label: 'Riepilogo', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
   { to: '/cassa', icon: '◫', label: 'Cassa', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/archivio', icon: '▤', label: 'Archivio periodi', roles: ['master', 'viewer', 'proprietario'] },
   { to: '/incassi', icon: '€', label: 'Incassi serata', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
   { to: '/chioschetto', icon: '☕', label: 'Chioschetto', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
   { to: '/uscite', icon: '↓', label: 'Uscite', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
   { to: '/spese-fisse', icon: '⏲', label: 'Spese fisse', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
   { to: '/dipendenti', icon: '◐', label: 'Dipendenti', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
-  { to: '/sadiki', icon: '◧', label: 'Sadiki', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
   { to: '/soci', icon: '◆', label: 'Spese soci', roles: ['master', 'viewer', 'proprietario'] },
   { to: '/impostazioni', icon: '⚙', label: 'Impostazioni', roles: ['master'] },
 ]
@@ -18,6 +18,7 @@ const ROLE_LABELS = {
   master: 'Master',
   operatore: 'Operatore',
   viewer: 'Sola visione',
+  proprietario: 'Proprietario',
 }
 
 export default function Layout() {

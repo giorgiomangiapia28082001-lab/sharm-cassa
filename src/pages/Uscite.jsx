@@ -5,6 +5,7 @@ import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
 import { useTassi, tassiSicuri } from '../lib/tassi'
 import { caricaAllegato } from '../lib/foto'
+import { usePeriodoScelto, SceltaPeriodo, AvvisoArchivio, filtraPeriodo } from '../lib/periodi'
 
 import { oggiLocale } from '../lib/date'
 
@@ -24,6 +25,7 @@ export default function Uscite() {
   const { profile, isMaster, isViewer, puoInserire} = useAuth()
   const toast = useToast()
   const { tassi } = useTassi()
+  const per = usePeriodoScelto()
   const [righe, setRighe] = useState([])
   const [categorie, setCategorie] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,11 +42,10 @@ export default function Uscite() {
     setLoading(true)
     const [{ data: us }, { data: cat }] = await Promise.all([
       esegui(
-        supabase
-          .from('uscite')
-          .select('*, categorie_uscite(nome), profiles:inserito_da(nome)')
-          .order('data', { ascending: false })
-          .limit(100),
+        filtraPeriodo(
+          supabase.from('uscite').select('*, categorie_uscite(nome), profiles:inserito_da(nome)'),
+          per.periodo
+        ).order('data', { ascending: false }),
         toast, 'il caricamento delle uscite'
       ),
       esegui(
@@ -62,8 +63,14 @@ export default function Uscite() {
 
   useEffect(() => {
     avvisaSeOffline(toast)
-    carica()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!per.caricato) return
+    setEditandoId(null)
+    setEditandoGeneratoDaAcconto(false)
+    carica()
+  }, [per.caricato, per.periodo?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function update(campo, valore) {
     setForm((f) => ({ ...f, [campo]: valore }))
@@ -173,14 +180,19 @@ export default function Uscite() {
           <h1 className="page-title">Uscite</h1>
           <p className="page-subtitle">Registra le spese giorno per giorno, con categoria ed eventuale foto dello scontrino.</p>
         </div>
-        {puoInserire && (
-          <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
-            {mostraForm ? 'Nascondi modulo' : '+ Nuova uscita'}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <SceltaPeriodo periodi={per.periodi} periodo={per.periodo} onChange={per.scegli} />
+          {puoInserire && !per.inArchivio && (
+            <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
+              {mostraForm ? 'Nascondi modulo' : '+ Nuova uscita'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {puoInserire && mostraForm && (
+      <AvvisoArchivio periodo={per.periodo} onTornaAlCorrente={() => per.scegli(null)} />
+
+      {puoInserire && mostraForm && (!per.inArchivio || editandoId) && (
         <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
           {editandoId && (
             <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
@@ -330,7 +342,7 @@ export default function Uscite() {
 
       {/* ── STORICO ── */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 16, color: 'var(--notte)', margin: 0, flex: '1 1 auto' }}>Storico</h3>
+        <h3 style={{ fontSize: 16, color: 'var(--notte)', margin: 0, flex: '1 1 auto' }}>Uscite del periodo</h3>
         <select value={filtroMetodo} onChange={(e) => setFiltroMetodo(e.target.value)} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--linea)', background: '#fff' }}>
           <option value="">Tutti i metodi</option>
           <option value="contanti">Contanti</option>

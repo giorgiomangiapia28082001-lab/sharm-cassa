@@ -4,6 +4,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
 import { oggiLocale, confrontaStringhe } from '../lib/date'
+import { usePeriodoScelto, SceltaPeriodo, AvvisoArchivio, filtraPeriodo } from '../lib/periodi'
 
 const oggi = oggiLocale
 
@@ -20,6 +21,7 @@ const VUOTO = {
 export default function Chioschetto() {
   const { profile, isMaster, isViewer, puoInserire} = useAuth()
   const toast = useToast()
+  const per = usePeriodoScelto()
   const [righe, setRighe] = useState([])
   const [form, setForm] = useState(VUOTO)
   const [loading, setLoading] = useState(true)
@@ -32,7 +34,7 @@ export default function Chioschetto() {
     setLoading(true)
     const [{ data, error }, { data: t, error: errT }] = await Promise.all([
       esegui(
-        supabase.from('incassi_chioschetto').select('*, profiles:inserito_da(nome)').order('data', { ascending: false }).limit(60),
+        filtraPeriodo(supabase.from('incassi_chioschetto').select('*, profiles:inserito_da(nome)'), per.periodo).order('data', { ascending: false }),
         toast,
         'il caricamento dello storico chioschetto'
       ),
@@ -49,8 +51,13 @@ export default function Chioschetto() {
 
   useEffect(() => {
     avvisaSeOffline(toast)
-    carica()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!per.caricato) return
+    annullaForm()
+    carica()
+  }, [per.caricato, per.periodo?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function update(campo, valore) {
     setForm((f) => ({ ...f, [campo]: valore }))
@@ -125,14 +132,19 @@ export default function Chioschetto() {
           <h1 className="page-title">Chioschetto</h1>
           <p className="page-subtitle">Registra le entrate giornaliere del chioschetto, divise per valuta. Contabilità separata; i contanti confluiscono nella cassa.</p>
         </div>
-        {puoInserire && (
-          <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
-            {mostraForm ? 'Nascondi modulo' : '+ Nuova entrata'}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <SceltaPeriodo periodi={per.periodi} periodo={per.periodo} onChange={per.scegli} />
+          {puoInserire && !per.inArchivio && (
+            <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>
+              {mostraForm ? 'Nascondi modulo' : '+ Nuova entrata'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {puoInserire && mostraForm && (
+      <AvvisoArchivio periodo={per.periodo} onTornaAlCorrente={() => per.scegli(null)} />
+
+      {puoInserire && mostraForm && (!per.inArchivio || editandoId) && (
         <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
           {editandoId && (
             <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
@@ -202,14 +214,14 @@ export default function Chioschetto() {
         </form>
       )}
 
-      <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Storico</h3>
+      <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Entrate del periodo</h3>
 
       {loading ? (
         <p className="page-subtitle">Caricamento…</p>
       ) : righe.length === 0 ? (
         <div className="empty-state card">
-          <div className="empty-state-title">Nessuna entrata registrata</div>
-          <p>Quando inserisci la prima entrata del chioschetto, apparirà qui.</p>
+          <div className="empty-state-title">Nessuna entrata in questo periodo</div>
+          <p>{per.inArchivio ? 'In questo periodo il chioschetto non aveva entrate registrate.' : 'Quando inserisci la prima entrata del periodo, apparirà qui.'}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

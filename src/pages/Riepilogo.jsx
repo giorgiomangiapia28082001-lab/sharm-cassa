@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { oggiLocale, primoGiornoMeseLocale, confrontaStringhe } from '../lib/date'
+import { primoGiornoMeseLocale } from '../lib/date'
+import { conFondoIeri, eurSalaReale } from '../lib/calcoli'
+import { usePeriodoScelto, SceltaPeriodo, filtraPeriodo } from '../lib/periodi'
 
-const oggi = oggiLocale
-const inizioMese = primoGiornoMeseLocale
 const primoGiornoMese = primoGiornoMeseLocale
 
 export default function Riepilogo() {
@@ -16,8 +16,7 @@ export default function Riepilogo() {
   const [chioschetto, setChioschetto] = useState([])
   const [uscite, setUscite] = useState([])
   const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
-  const [dataInizio, setDataInizio] = useState(inizioMese())
-  const [dataFine, setDataFine] = useState(oggi())
+  const per = usePeriodoScelto()
   const [speseFisseNonPagate, setSpeseFisseNonPagate] = useState([])
   const [targetData, setTargetData] = useState(null)
   const [movimentiCambio, setMovimentiCambio] = useState([])
@@ -94,11 +93,11 @@ export default function Riepilogo() {
   async function carica() {
     setLoading(true)
     const [{ data: inc }, { data: chio }, { data: usc }, { data: t }, { data: mov }] = await Promise.all([
-      supabase.from('incassi').select('*').gte('data', dataInizio).lte('data', dataFine).order('data'),
-      supabase.from('incassi_chioschetto').select('*').gte('data', dataInizio).lte('data', dataFine).order('data'),
-      supabase.from('uscite').select('*').gte('data', dataInizio).lte('data', dataFine),
+      filtraPeriodo(supabase.from('incassi').select('*'), per.periodo).order('data'),
+      filtraPeriodo(supabase.from('incassi_chioschetto').select('*'), per.periodo).order('data'),
+      filtraPeriodo(supabase.from('uscite').select('*'), per.periodo),
       supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1),
-      supabase.from('movimenti_cassa').select('*').eq('tipo', 'cambio_valuta').gte('data', dataInizio).lte('data', dataFine).order('data'),
+      filtraPeriodo(supabase.from('movimenti_cassa').select('*').eq('tipo', 'cambio_valuta'), per.periodo).order('data'),
     ])
     setIncassi(inc || [])
     setChioschetto(chio || [])
@@ -110,7 +109,8 @@ export default function Riepilogo() {
     if (true) await caricaTarget(Number(t0.eur_usd) || 1.08, Number(t0.eur_egp) || 60)
   }
 
-  useEffect(() => { carica(); caricaSpeseFisse() }, [dataInizio, dataFine])
+  useEffect(() => { caricaSpeseFisse() }, [])
+  useEffect(() => { if (per.caricato) carica() }, [per.caricato, per.periodo?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Totali per valuta — incassi di sala
   // Formula fondo cassa: i contanti inseriti includono il fondo del giorno prima.
@@ -118,12 +118,8 @@ export default function Riepilogo() {
   // Cioè: per ogni giorno, sommiamo (eur_contanti + bonifici + fondo_cassa)
   // e sottraiamo il fondo_cassa del giorno PRECEDENTE (che era già incluso nei contanti).
   // Ordiniamo per data per trovare il giorno precedente.
-  const incassiOrdinati = [...incassi].sort((a, b) => confrontaStringhe(a.created_at, b.created_at))
-  const totIncassiEur = incassiOrdinati.reduce((acc, r, i) => {
-    const fondoIeri = i > 0 ? Number(incassiOrdinati[i - 1].fondo_cassa) : 0
-    const incassoReale = Number(r.eur_contanti) + Number(r.bonifici) - fondoIeri + Number(r.fondo_cassa)
-    return acc + incassoReale
-  }, 0)
+  const incassiConFondo = conFondoIeri(incassi)
+  const totIncassiEur = incassiConFondo.reduce((acc, x) => acc + eurSalaReale(x), 0)
   const totIncassiUsd = incassi.reduce((a, r) => a + Number(r.usd_contanti), 0)
   const totIncassiEgp = incassi.reduce((a, r) => a + Number(r.egp_pos) + Number(r.egp_contanti), 0)
 
@@ -156,10 +152,10 @@ export default function Riepilogo() {
 
   // Serie giornaliera per il grafico
   const giorniMap = {}
-  incassiOrdinati.forEach((r, i) => {
+  incassiConFondo.forEach((x) => {
+    const { r } = x
     const giorno = r.data
-    const fondoIeri = i > 0 ? Number(incassiOrdinati[i - 1].fondo_cassa) : 0
-    const incassoEurReale = Number(r.eur_contanti) + Number(r.bonifici) - fondoIeri + Number(r.fondo_cassa)
+    const incassoEurReale = eurSalaReale(x)
     const valoreEur = incassoEurReale + Number(r.delivery_eur || 0)
       + Number(r.usd_contanti) / eurUsdRate
       + (Number(r.egp_pos) + Number(r.egp_contanti) + Number(r.delivery_egp || 0)) / eurEgpRate
@@ -202,13 +198,12 @@ export default function Riepilogo() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Riepilogo cassa</h1>
-          <p className="page-subtitle">Vista d'insieme su incassi, delivery, uscite e netto del periodo selezionato.</p>
+          <p className="page-subtitle">
+            Vista d'insieme su incassi, delivery, uscite e netto del periodo.
+            {per.inArchivio && <> Stai guardando un periodo chiuso: <Link to={`/archivio?periodo=${per.periodo.id}`}>apri la sua cartella in Archivio</Link>.</>}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="date" value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid var(--linea)' }} />
-          <span style={{ color: 'var(--inchiostro-soft)' }}>—</span>
-          <input type="date" value={dataFine} onChange={(e) => setDataFine(e.target.value)} style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid var(--linea)' }} />
-        </div>
+        <SceltaPeriodo periodi={per.periodi} periodo={per.periodo} onChange={per.scegli} />
       </div>
 
       {loading ? (
