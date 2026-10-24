@@ -15,9 +15,13 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from './supabase'
 
-function giorno(d) {
-  return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+// Le date di apertura/chiusura sono salvate in ora UTC dal database
+// (es. chiusura al 30/09 = 30/09 23:59:59 UTC): mostrate in ora locale
+// diventerebbero il giorno dopo, quindi le leggiamo in UTC.
+export function giornoPeriodo(d) {
+  return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
 }
+const giorno = giornoPeriodo
 
 export function etichettaPeriodo(p) {
   if (!p) return ''

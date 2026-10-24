@@ -22,9 +22,11 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Il caricamento finisce solo dopo aver letto anche il profilo: prima
+    // l'app mostrava per un attimo "account senza ruolo" a ogni apertura.
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
-      if (session?.user) loadProfile(session.user.id)
+      if (session?.user) await loadProfile(session.user.id)
       setLoading(false)
     })
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { filtraPeriodo, etichettaPeriodo } from '../lib/periodi'
+import { filtraPeriodo, giornoPeriodo } from '../lib/periodi'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
@@ -249,7 +249,9 @@ export default function Cassa() {
         <div>
           <h1 className="page-title">Cassa</h1>
           <p className="page-subtitle">
-            Saldo del periodo in corso{periodoAperto ? ` (${etichettaPeriodo(periodoAperto)})` : ''}, da confrontare con quanto ha in mano il direttore.
+            {periodoAperto
+              ? `Saldo del periodo ${periodoAperto.numero}, aperto dal ${giornoPeriodo(periodoAperto.data_apertura)}`
+              : 'Saldo del periodo in corso'}, da confrontare con quanto ha in mano il direttore.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

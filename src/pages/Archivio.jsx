@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/Toast'
 import { esegui } from '../lib/operazioni'
 import { useTassi, tassiSicuri } from '../lib/tassi'
-import { usePeriodoScelto, etichettaPeriodo } from '../lib/periodi'
+import { usePeriodoScelto, etichettaPeriodo, giornoPeriodo } from '../lib/periodi'
 import { totaliIncassi, totaliChioschetto } from '../lib/calcoli'
 
 // ============================================================================
@@ -17,7 +17,7 @@ import { totaliIncassi, totaliChioschetto } from '../lib/calcoli'
 const euro = (v) => `€ ${Number(v || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const lire = (v) => `${Math.round(Number(v || 0)).toLocaleString('it-IT')} LE`
 const dollari = (v) => `$ ${Number(v || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-const giorno = (d) => new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+const giorno = giornoPeriodo
 
 const TIPI_MOVIMENTO = {
   cambio_valuta: 'Cambi valuta',
@@ -51,9 +51,12 @@ export default function Archivio() {
   const toast = useToast()
   const { tassi } = useTassi()
   const per = usePeriodoScelto()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const [dati, setDati] = useState(null)
   const [loading, setLoading] = useState(false)
+  // Sul telefono la cartella aperta sta sotto l'elenco: dopo un tocco su una
+  // cartella, appena il riepilogo è pronto ci portiamo lì.
+  const scorriAllaCartella = useRef(false)
 
   // In Archivio, se nessuno ha scelto un periodo, si apre l'ultimo chiuso.
   const chiusi = per.periodi.filter((p) => p.data_chiusura)
@@ -87,6 +90,13 @@ export default function Archivio() {
     if (scelto) carica(scelto)
   }, [scelto?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!loading && dati && scorriAllaCartella.current) {
+      scorriAllaCartella.current = false
+      document.getElementById('cartella')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [loading, dati])
+
   const { eurUsd, eurEgp } = tassiSicuri(tassi)
   const inEur = (importo, valuta) =>
     valuta === 'EGP' ? Number(importo) / eurEgp : valuta === 'USD' ? Number(importo) / eurUsd : Number(importo)
@@ -103,13 +113,18 @@ export default function Archivio() {
       </div>
 
       {/* ── LE CARTELLE ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 10, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, marginBottom: 24 }}>
         {per.periodi.map((p) => {
           const attivo = scelto?.id === p.id
           return (
             <button
               key={p.id}
-              onClick={() => per.scegli(p.id === per.aperto?.id ? null : p.id)}
+              onClick={() => {
+                // Sempre con l'id esplicito: senza, l'Archivio apre l'ultimo
+                // periodo chiuso (anche quando si tocca quello in corso).
+                setParams({ periodo: p.id }, { replace: true })
+                scorriAllaCartella.current = true
+              }}
               className="card"
               style={{
                 textAlign: 'left', cursor: 'pointer', padding: '12px 14px', font: 'inherit', color: 'inherit',
@@ -127,6 +142,7 @@ export default function Archivio() {
         })}
       </div>
 
+      <div id="cartella" style={{ scrollMarginTop: 12 }}>
       {!per.caricato ? (
         <p className="page-subtitle">Caricamento…</p>
       ) : !scelto ? (
@@ -139,6 +155,7 @@ export default function Archivio() {
       ) : (
         <CartellaPeriodo periodo={scelto} dati={dati} inEur={inEur} />
       )}
+      </div>
     </div>
   )
 }
