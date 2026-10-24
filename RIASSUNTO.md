@@ -72,6 +72,7 @@ un caricamento a mano su GitHub può sovrascrivere modifiche fatte da Claude.
 | **Uscite** | Spese con foto dello scontrino e categorie |
 | **Spese fisse** | Voci ricorrenti mensili con spunta di pagamento |
 | **Dipendenti** | Presenze, stipendi proporzionali, acconti, riepilogo per periodo |
+| **Inventario** | Articoli in magazzino, giacenza (= ultimo conteggio), scorta minima, valore; "Fai l'inventario" conta tutto insieme. Non tocca la cassa |
 | **Spese soci** | Contabilità soci, separata dalla cassa, con allegati |
 | **Impostazioni** | Tassi di cambio e categorie |
 
@@ -142,6 +143,7 @@ delle sessioni di luglio-settembre 2026.
 | 32 | Saldo per qualsiasi periodo (`saldo_periodo_cassa`) + indici sul periodo | ✅ eseguita il 24/10/2026, saldi identici a prima |
 | 33 | Funzioni del database solo per chi ha fatto l'accesso | ✅ eseguita il 24/10/2026 |
 | 34 | Acconti nel periodo giusto alla chiusura + correzione di 11 acconti di ottobre | ✅ eseguita il 24/10/2026 |
+| 35 | Inventario: tabelle `inventario_articoli` e `inventario_conteggi` con permessi | ✅ eseguita il 24/10/2026, permessi provati per ogni ruolo |
 
 I file delle migrazioni 29, 30 e 31 non sono né nel repository né nel PC: se
 l'utente li ritrova, vanno aggiunti in `database/`.
@@ -191,8 +193,16 @@ periodo nel periodo dopo.
 ## 8. Altre cose da sapere
 - **Foto dipendenti:** salvate come base64 dentro il database. Funzionano, ma andrebbero
   spostate su Storage (serve migrare i dati esistenti).
-- **Layout telefono:** l'utente lavora molto da telefono. Già corretti: moduli a una
-  colonna, campi data su iOS, pulsanti presenza a tutta larghezza, tabelle che scorrono.
+- **Layout telefono:** l'utente lavora molto da telefono. Sotto gli 860 px il menu è
+  una barra in alto con ☰ e un pannello laterale (`Layout.jsx` + `index.css`).
+  Regole da rispettare nelle pagine nuove:
+  - le azioni in testa alla pagina vanno in un `<div className="azioni-pagina">`;
+  - le griglie di schede usano `gridTemplateColumns: 'minmax(0, 1fr)'`, altrimenti
+    una tabella larga allarga tutta la griglia e le schede escono dallo schermo
+    (era il guasto di Dipendenti);
+  - niente tabelle con tante colonne: meglio liste a righe;
+  - caselle con testo a 16 px (sotto, iPhone ingrandisce la pagina).
+  Prova veloce: anteprima a 375 px di larghezza, nessun elemento oltre il bordo destro.
 - **Garage:** le 9 tabelle `garage_*` finite per errore nel database del ristorante sono
   state rimosse (verificato: 0 tabelle rimaste).
 
