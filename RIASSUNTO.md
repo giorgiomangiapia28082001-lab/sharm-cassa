@@ -64,16 +64,27 @@ un caricamento a mano su GitHub può sovrascrivere modifiche fatte da Claude.
 ## 4. Sezioni dell'app
 | Pagina | A cosa serve |
 |---|---|
-| **Riepilogo** | Statistiche periodo, grafico andamento, tabella giorno-per-giorno con progressivo |
-| **Cassa** | Saldo in tempo reale per valuta, cambio valuta, scarico POS, versamenti, chiusura periodo |
+| **Riepilogo** | Statistiche del periodo, grafico andamento, target giornaliero |
+| **Cassa** | Saldo del periodo in corso per valuta, cambio valuta, scarico POS, versamenti, chiusura periodo |
+| **Archivio periodi** | Una "cartella" per periodo: entrate, uscite per categoria, acconti, movimenti, saldo; link per correggere le voci |
 | **Incassi serata** | Incasso giornaliero ristorante (una riga al giorno, tutte le valute) |
 | **Chioschetto** | Incassi del chiosco (cassa separata, stessi proprietari) |
 | **Uscite** | Spese con foto dello scontrino e categorie |
 | **Spese fisse** | Voci ricorrenti mensili con spunta di pagamento |
 | **Dipendenti** | Presenze, stipendi proporzionali, acconti, riepilogo per periodo |
-| **Sadiki** | Clienti B2B: produzioni e pagamenti |
 | **Spese soci** | Contabilità soci, separata dalla cassa, con allegati |
 | **Impostazioni** | Tassi di cambio e categorie |
+
+La sezione **Sadiki** (clienti B2B) è stata tolta il 24/10/2026: le tabelle
+`clienti_b2b`, `produzioni_b2b`, `pagamenti_b2b` e i movimenti `incasso_b2b`
+restano nel database, così i totali dei periodi passati non cambiano.
+
+**Tutto per periodo:** Riepilogo, Incassi, Uscite, Chioschetto e i movimenti in
+Cassa mostrano il periodo in corso; in alto c'è lo stesso menu per passare a un
+periodo passato (indirizzo `?periodo=<id>`, codice in `src/lib/periodi.jsx`).
+Su un periodo chiuso si possono correggere le voci ma non aggiungerne di nuove.
+I calcoli sugli incassi (fondo cassa) sono in `src/lib/calcoli.js`, condivisi da
+Riepilogo, Incassi e Archivio.
 
 Nessuna pagina si aggiorna da sola quando un altro dispositivo inserisce dati:
 serve ricaricare la pagina.
@@ -92,7 +103,13 @@ Ogni riga (incasso, uscita, movimento…) viene agganciata al **periodo aperto**
 trigger `before insert`. La vista `saldo_cassa_attuale` somma **solo le righe
 del periodo aperto**.
 Alla chiusura: viene fotografato il saldo, il periodo si chiude e **ne viene
-aperto uno nuovo**. La chiusura si può annullare (`annulla_chiusura_cassa`).
+aperto uno nuovo**, che riparte da 0 (scelta dell'utente del 24/10/2026: a ogni
+chiusura tutto si azzera, niente riporto). Il periodo chiuso va in Archivio.
+L'ultima chiusura si può annullare (`annulla_chiusura_cassa`).
+
+Il saldo di qualsiasi periodo si calcola con `saldo_periodo_cassa(id)`; la vista
+`saldo_cassa_attuale` la usa per il periodo aperto. **La formula del saldo sta
+solo lì** (migrazione 32).
 
 ### Il chioschetto
 Contabilità separata (tabella `incassi_chioschetto`, voce distinta nel
@@ -122,6 +139,9 @@ delle sessioni di luglio-settembre 2026.
 | 29 | Recupero righe orfane + prevenzione | da verificare — **file non trovato** |
 | 30 | Disattivazione utenti (colonna `attivo`) | ❌ non eseguita (colonna assente) — **file non trovato** |
 | 31 | Eliminazione definitiva di un utente | da verificare — **file non trovato** |
+| 32 | Saldo per qualsiasi periodo (`saldo_periodo_cassa`) + indici sul periodo | ✅ eseguita il 24/10/2026, saldi identici a prima |
+| 33 | Funzioni del database solo per chi ha fatto l'accesso | ✅ eseguita il 24/10/2026 |
+| 34 | Acconti nel periodo giusto alla chiusura + correzione di 11 acconti di ottobre | ✅ eseguita il 24/10/2026 |
 
 I file delle migrazioni 29, 30 e 31 non sono né nel repository né nel PC: se
 l'utente li ritrova, vanno aggiunti in `database/`.
@@ -134,7 +154,11 @@ e i movimenti **versamento** e **incasso_b2b**. La 23 ha rimesso tutto a posto.
 **Lezione:** prima di riscrivere una vista o una funzione, controllare **tutte**
 le migrazioni successive che la ridefiniscono.
 
-## 7. ⚠️ PROBLEMA APERTO — saldo cassa tra un periodo e l'altro
+## 7. Saldo cassa tra un periodo e l'altro
+
+**Deciso il 24/10/2026:** alla chiusura tutto riparte da 0 (risposta alla
+domanda qui sotto: niente riporto). La spiegazione resta per capire perché i
+contanti in LE possono andare sotto zero a inizio periodo.
 
 ### Il sintomo
 Il saldo contanti in LE risultava negativo. Lo scarico del POS **funziona**:
@@ -146,7 +170,7 @@ cassetto no. Nel periodo nuovo ogni spesa scava sotto zero finché non si
 scarica il POS (i clienti pagano molto col POS, le spese si pagano in contanti).
 Nel periodo 6: scarico POS 47.025 LE; contanti LE prima dello scarico ≈ −34.871.
 
-### La domanda ancora senza risposta
+### La domanda (risolta: si riparte da zero)
 **Quando si chiude un periodo, i contanti restano nel cassetto o vengono portati via?**
 - Se **restano** → serve il **riporto**: alla chiusura il saldo fotografato diventa
   il saldo iniziale del periodo nuovo (colonne `saldo_iniziale_*` su `periodi_cassa`,
@@ -159,6 +183,10 @@ Periodo aperto: **n. 7, dal 01/10/2026**. `saldo_cassa_attuale`:
 contanti 7.614 € · 47.285 LE · 80 $; **saldo POS −100.343 LE** (da capire: un saldo
 POS negativo vuol dire che sono stati scaricati più soldi di quelli incassati col POS
 nel periodo, o che lo scarico è contato in un periodo diverso dagli incassi).
+Verificato: nel periodo 7 gli scarichi POS sono 358.500 LE contro 258.157 LE di
+incassi POS; una parte sono i 57.092 LE rimasti sul POS a fine periodo 6. Con
+l'azzeramento a ogni chiusura succede ogni volta che si scarica il POS di un
+periodo nel periodo dopo.
 
 ## 8. Altre cose da sapere
 - **Foto dipendenti:** salvate come base64 dentro il database. Funzionano, ma andrebbero
@@ -169,8 +197,16 @@ nel periodo, o che lo scarico è contato in un periodo diverso dagli incassi).
   state rimosse (verificato: 0 tabelle rimaste).
 
 ## 9. Backlog
-- **Riporto del saldo tra periodi** (punto 7) — priorità massima
-- Capire il saldo POS negativo del periodo 7
+- Saldo POS negativo dopo l'azzeramento (punto 7): decidere se lo scarico POS va
+  contato nel periodo degli incassi o se il POS va escluso dall'azzeramento
+- Controllo del ruolo **master** dentro `chiudi_periodo_cassa` e `annulla_chiusura_*`
+  (oggi qualsiasi utente con accesso può chiamarle dal database)
+- Bucket `foto` pubblico: chi ha il link vede scontrini e allegati dei soci
+  senza accesso. Valutare bucket privato con link temporanei
+- Attivare in Supabase la protezione dalle password già rubate (Auth → password)
+- Modificare dall'Archivio anche i movimenti di cassa dei periodi chiusi
+  (oggi si vedono ma non si correggono)
+- Target giornaliero nel Riepilogo: la media conta anche i giorni con sole uscite
 - Ritrovare o riscrivere le migrazioni 29-31; eseguire la 30 se serve
 - Valutare se rendere **privato** il repository GitHub
 - Foto dipendenti da base64 a Supabase Storage
@@ -181,6 +217,15 @@ nel periodo, o che lo scarico è contato in un periodo diverso dagli incassi).
 
 ## 10. Registro modifiche
 Le voci più recenti in alto. Una riga per ogni modifica pubblicata.
+
+- **24/10/2026** — Nuova pagina **Archivio periodi** (una cartella per periodo con
+  riepilogo completo e link per correggere). Riepilogo, Incassi, Uscite,
+  Chioschetto e movimenti Cassa ora lavorano **per periodo** con lo stesso menu.
+  Tolta la sezione **Sadiki**. Fondo cassa calcolato per data. Corretti: date dei
+  periodi (fuso orario), lampo "account senza ruolo", proprietario respinto da
+  Spese soci. Migrazioni **32** (saldo per periodo + indici), **33** (funzioni solo
+  con login), **34** (acconti nel periodo giusto + 11 acconti di ottobre spostati
+  da settembre a ottobre). Saldi verificati identici prima e dopo.
 
 - **24/10/2026** — Progetto portato su Claude Code. Aggiunti `CLAUDE.md` e questo
   `RIASSUNTO.md`, le migrazioni 01-28 e gli script SQL in `database/`, le vecchie
