@@ -228,6 +228,12 @@ periodo nel periodo dopo.
 ## 10. Registro modifiche
 Le voci più recenti in alto. Una riga per ogni modifica pubblicata.
 
+- **24/10/2026 (sera)** — **Schermate da telefono**: menu con barra in alto e ☰ (prima
+  occupava tutta la prima schermata e mancava Esci), Dipendenti che usciva dallo
+  schermo (griglia allargata dalla tabella acconti, ora lista), pulsanti in testa
+  che vanno a capo, pulsanti e caselle più grandi, testo a 16 px nelle caselle.
+  Nuova sezione **Inventario** con migrazione **35** (articoli + conteggi).
+
 - **24/10/2026** — Nuova pagina **Archivio periodi** (una cartella per periodo con
   riepilogo completo e link per correggere). Riepilogo, Incassi, Uscite,
   Chioschetto e movimenti Cassa ora lavorano **per periodo** con lo stesso menu.
