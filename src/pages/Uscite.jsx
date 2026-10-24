@@ -180,7 +180,7 @@ export default function Uscite() {
           <h1 className="page-title">Uscite</h1>
           <p className="page-subtitle">Registra le spese giorno per giorno, con categoria ed eventuale foto dello scontrino.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="azioni-pagina">
           <SceltaPeriodo periodi={per.periodi} periodo={per.periodo} onChange={per.scegli} />
           {puoInserire && !per.inArchivio && (
             <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>

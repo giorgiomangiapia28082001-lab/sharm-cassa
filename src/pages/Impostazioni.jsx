@@ -112,6 +112,8 @@ export default function Impostazioni() {
                 border: 'none',
                 opacity: c.attiva ? 1 : 0.4,
                 cursor: 'pointer',
+                fontSize: 14,
+                padding: '10px 16px',
               }}
               title={c.attiva ? 'Clicca per disattivare' : 'Clicca per riattivare'}
             >

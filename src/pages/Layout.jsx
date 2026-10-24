@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 
 const NAV_ITEMS = [
@@ -10,6 +11,7 @@ const NAV_ITEMS = [
   { to: '/uscite', icon: '↓', label: 'Uscite', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
   { to: '/spese-fisse', icon: '⏲', label: 'Spese fisse', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
   { to: '/dipendenti', icon: '◐', label: 'Dipendenti', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
+  { to: '/inventario', icon: '▦', label: 'Inventario', roles: ['master', 'operatore', 'viewer', 'proprietario'] },
   { to: '/soci', icon: '◆', label: 'Spese soci', roles: ['master', 'viewer', 'proprietario'] },
   { to: '/impostazioni', icon: '⚙', label: 'Impostazioni', roles: ['master'] },
 ]
@@ -24,14 +26,40 @@ const ROLE_LABELS = {
 export default function Layout() {
   const { profile, signOut } = useAuth()
   const ruolo = profile?.ruolo
+  const { pathname } = useLocation()
+  // Sul telefono il menu è un pannello che si apre con ☰ (su computer è
+  // sempre visibile a sinistra e questo stato non conta).
+  const [menuAperto, setMenuAperto] = useState(false)
 
   const items = NAV_ITEMS.filter((item) => item.roles.includes(ruolo))
+  const paginaAttuale = items.find((i) => (i.to === '/' ? pathname === '/' : pathname.startsWith(i.to)))
+
+  // Cambiando pagina il menu si richiude e si torna in cima.
+  useEffect(() => {
+    setMenuAperto(false)
+    window.scrollTo(0, 0)
+  }, [pathname])
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">Sharm Cassa</div>
-        <div className="brand-sub">Gestionale ristorante</div>
+      <header className="topbar">
+        <button className="topbar-menu" onClick={() => setMenuAperto(true)} aria-label="Apri il menu">☰</button>
+        <div className="topbar-titolo">
+          <span className="topbar-brand">Sharm Cassa</span>
+          {paginaAttuale && <span className="topbar-pagina">{paginaAttuale.label}</span>}
+        </div>
+      </header>
+
+      {menuAperto && <div className="sidebar-velo" onClick={() => setMenuAperto(false)} />}
+
+      <aside className={`sidebar${menuAperto ? ' aperta' : ''}`}>
+        <div className="sidebar-testa">
+          <div>
+            <div className="brand">Sharm Cassa</div>
+            <div className="brand-sub">Gestionale ristorante</div>
+          </div>
+          <button className="sidebar-chiudi" onClick={() => setMenuAperto(false)} aria-label="Chiudi il menu">✕</button>
+        </div>
 
         <nav>
           {items.map((item) => (
@@ -39,6 +67,7 @@ export default function Layout() {
               key={item.to}
               to={item.to}
               end={item.to === '/'}
+              onClick={() => setMenuAperto(false)}
               className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
             >
               <span className="nav-icon">{item.icon}</span>

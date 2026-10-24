@@ -12,6 +12,7 @@ import SpeseFisse from './pages/SpeseFisse'
 import Uscite from './pages/Uscite'
 import Dipendenti from './pages/Dipendenti'
 import Archivio from './pages/Archivio'
+import Inventario from './pages/Inventario'
 import Soci from './pages/Soci'
 import Impostazioni from './pages/Impostazioni'
 
@@ -78,6 +79,7 @@ function RotteProtette() {
         <Route path="uscite" element={<Uscite />} />
         <Route path="dipendenti" element={<Dipendenti />} />
         <Route path="archivio" element={<Archivio />} />
+        <Route path="inventario" element={<Inventario />} />
         <Route
           path="soci"
           element={['master', 'viewer', 'proprietario'].includes(profile.ruolo) ? <Soci /> : <Navigate to="/" />}

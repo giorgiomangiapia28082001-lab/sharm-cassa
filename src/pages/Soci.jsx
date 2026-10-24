@@ -278,7 +278,7 @@ export default function Soci() {
           <h1 className="page-title">Spese soci</h1>
           <p className="page-subtitle">Spese personali sostenute dai proprietari nel periodo corrente, scalate a parte dall'utile da dividere.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div className="azioni-pagina">
           <button className="btn btn-ghost" onClick={() => setMostraStorico((v) => !v)}>
             {mostraStorico ? '✕ Chiudi storico' : 'Storico periodi'}
           </button>

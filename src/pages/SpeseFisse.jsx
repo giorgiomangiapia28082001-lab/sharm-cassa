@@ -203,7 +203,7 @@ export default function SpeseFisse() {
           return (
             <div key={tipo} style={{ marginBottom: 28 }}>
               <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>{TIPO_LABEL[tipo]}</h3>
-              <div style={{ display: 'grid', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
                 {vociTipo.map((v) => {
                   const pagato = !!pagamentiMap[v.id]
                   const inRitardo = !pagato && oggiGiorno > v.giorno_scadenza

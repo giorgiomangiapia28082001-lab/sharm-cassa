@@ -396,7 +396,7 @@ export default function Dipendenti() {
           <h1 className="page-title">Dipendenti</h1>
           <p className="page-subtitle">Presenze giornaliere, stipendi e acconti con calcolo automatico del residuo.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div className="azioni-pagina">
           <input type="date" value={dataSelezionata} onChange={(e) => setDataSelezionata(e.target.value)} style={{ padding: '9px 12px', borderRadius: 6, border: '1px solid var(--linea)' }} />
           <button className="btn btn-ghost" onClick={() => setMostraPeriodo((v) => !v)}>
             {mostraPeriodo ? '✕ Chiudi riepilogo' : '📅 Riepilogo periodo'}
@@ -599,7 +599,9 @@ export default function Dipendenti() {
             </div>
           )
           return (
-        <div style={{ display: 'grid', gap: 12 }}>
+        // minmax(0, 1fr): senza, la griglia si allargava quanto la tabella
+        // acconti più larga e da telefono le schede uscivano dallo schermo.
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 12 }}>
           {lista.map((d) => {
             const stato = presenzeOggi[d.id]?.stato
             const acconti = accontiTotali[d.id] || { eur: 0, egp: 0 }
@@ -809,39 +811,31 @@ export default function Dipendenti() {
                     {righeAcconti.length > 0 && (
                       <div style={{ marginTop: 20, marginBottom: 16 }}>
                         <h4 style={{ fontSize: 14, marginBottom: 10, fontFamily: 'var(--font-body)' }}>Storico acconti</h4>
-                        <div style={{ overflowX: 'auto' }}>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>Data</th>
-                                <th>Importo €</th>
-                                <th>Importo LE</th>
-                                <th>Erogato da</th>
-                                <th>Note</th>
-                                {isMaster && <th></th>}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {righeAcconti.map((a) => (
-                                <tr key={a.id}>
-                                  <td>{new Date(a.data).toLocaleDateString('it-IT')}</td>
-                                  <td>{Number(a.importo_eur) > 0 ? `€ ${Number(a.importo_eur).toFixed(2)}` : '—'}</td>
-                                  <td>{Number(a.importo_egp) > 0 ? `${Number(a.importo_egp).toFixed(0)} LE` : '—'}</td>
-                                  <td style={{ textTransform: 'capitalize', color: 'var(--inchiostro-soft)' }}>
-                                    {a.erogato_da === 'direttore' ? 'Cassa ristorante' : a.erogato_da}
-                                  </td>
-                                  <td style={{ color: 'var(--inchiostro-soft)' }}>{a.note || '—'}</td>
-                                  {isMaster && (
-                                    <td>
-                                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)' }} onClick={() => eliminaAcconto(a.id, d.nome)}>
-                                        Elimina
-                                      </button>
-                                    </td>
-                                  )}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                        {/* Lista invece di tabella: da telefono 6 colonne non ci stavano */}
+                        <div>
+                          {righeAcconti.map((a) => (
+                            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: '1px solid var(--linea)' }}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: 14 }}>
+                                  {[
+                                    Number(a.importo_eur) > 0 && `€ ${Number(a.importo_eur).toFixed(2)}`,
+                                    Number(a.importo_egp) > 0 && `${Number(a.importo_egp).toFixed(0)} LE`,
+                                  ].filter(Boolean).join(' + ') || '—'}
+                                </div>
+                                <div style={{ fontSize: 12.5, color: 'var(--inchiostro-soft)', marginTop: 2 }}>
+                                  {new Date(a.data).toLocaleDateString('it-IT')}
+                                  {' · '}
+                                  <span style={{ textTransform: 'capitalize' }}>{a.erogato_da === 'direttore' ? 'Cassa ristorante' : a.erogato_da}</span>
+                                  {a.note ? ` · ${a.note}` : ''}
+                                </div>
+                              </div>
+                              {isMaster && (
+                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--corallo)', flexShrink: 0 }} onClick={() => eliminaAcconto(a.id, d.nome)}>
+                                  Elimina
+                                </button>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}

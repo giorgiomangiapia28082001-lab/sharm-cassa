@@ -132,7 +132,7 @@ export default function Chioschetto() {
           <h1 className="page-title">Chioschetto</h1>
           <p className="page-subtitle">Registra le entrate giornaliere del chioschetto, divise per valuta. Contabilità separata; i contanti confluiscono nella cassa.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="azioni-pagina">
           <SceltaPeriodo periodi={per.periodi} periodo={per.periodo} onChange={per.scegli} />
           {puoInserire && !per.inArchivio && (
             <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>

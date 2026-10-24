@@ -178,7 +178,7 @@ export default function Incassi() {
           <h1 className="page-title">Incassi serata</h1>
           <p className="page-subtitle">Registra l'incasso di sala e il delivery di ogni serata, diviso per valuta.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="azioni-pagina">
           <SceltaPeriodo periodi={per.periodi} periodo={per.periodo} onChange={per.scegli} />
           {puoInserire && !per.inArchivio && (
             <button className="btn btn-primary" onClick={() => { if (mostraForm) { annullaForm() } setMostraForm((v) => !v) }}>

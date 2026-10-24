@@ -254,7 +254,7 @@ export default function Cassa() {
               : 'Saldo del periodo in corso'}, da confrontare con quanto ha in mano il direttore.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div className="azioni-pagina">
           <Link className="btn btn-ghost" to="/archivio">📁 Archivio periodi</Link>
           {isMaster && (
             <button className="btn btn-primary" onClick={() => setMostraConfermaChiusura(true)}>
