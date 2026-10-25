@@ -65,7 +65,7 @@ un caricamento a mano su GitHub può sovrascrivere modifiche fatte da Claude.
 | Pagina | A cosa serve |
 |---|---|
 | **Riepilogo** | Statistiche del periodo, grafico andamento, target giornaliero |
-| **Cassa** | Saldo del periodo in corso per valuta, cambio valuta, scarico POS, versamenti, chiusura periodo |
+| **Cassa** | Saldo del periodo in corso per valuta, cambio valuta, scarico POS, chiusura periodo. **Solo master:** versamenti in cassa e "Rettifica cassa" (si scrive quanto c'è davvero; la differenza diventa un movimento `rettifica`) |
 | **Archivio periodi** | Una "cartella" per periodo: entrate, uscite per categoria, acconti, movimenti, saldo; link per correggere le voci |
 | **Incassi serata** | Incasso giornaliero ristorante (una riga al giorno, tutte le valute) |
 | **Chioschetto** | Incassi del chiosco (cassa separata, stessi proprietari) |
@@ -117,6 +117,20 @@ Contabilità separata (tabella `incassi_chioschetto`, voce distinta nel
 Riepilogo), ma i **contanti confluiscono nella cassa del ristorante**:
 compare quindi in `saldo_cassa_attuale`.
 
+### Le rettifiche
+Quando il conteggio vero non torna, il master usa "Rettifica cassa": per ogni voce
+(contanti €/LE/$, POS) viene salvato un movimento `rettifica` con la **differenza**
+(anche negativa). Contanti: `valuta_a` + `importo_a`; POS: `importo_pos` con
+`valuta_a` vuota. Il saldo le somma (migrazione 36). Non si modificano: se sbagliata,
+si elimina e se ne fa un'altra.
+
+### I soci
+Sono **tre**: Gianluigi, Luca e Giorgio (tabella `soci`). Il valore `erogato_da` degli
+acconti accetta `direttore`, `gianluigi`, `luca`, `giorgio`: se l'acconto lo dà un
+socio, `crea_uscita_da_acconto` crea anche la sua spesa socio. Per un socio nuovo
+servono: riga in `soci`, il vincolo `acconti_erogato_da_check`, la funzione
+`crea_uscita_da_acconto` e il menu "Chi ha dato i soldi" in `Dipendenti.jsx`.
+
 ### Le spese soci
 **Non toccano la cassa e non l'hanno mai toccata.** È voluto: servono a tenere
 separata la contabilità dei soci da quella del direttore.
@@ -144,6 +158,7 @@ delle sessioni di luglio-settembre 2026.
 | 33 | Funzioni del database solo per chi ha fatto l'accesso | ✅ eseguita il 24/10/2026 |
 | 34 | Acconti nel periodo giusto alla chiusura + correzione di 11 acconti di ottobre | ✅ eseguita il 24/10/2026 |
 | 35 | Inventario: tabelle `inventario_articoli` e `inventario_conteggi` con permessi | ✅ eseguita il 24/10/2026, permessi provati per ogni ruolo |
+| 36 | Movimento `rettifica` nel saldo; versamenti e rettifiche solo master; socio Giorgio (anche negli acconti) | ✅ eseguita il 25/10/2026, saldi identici, permessi provati |
 
 I file delle migrazioni 29, 30 e 31 non sono né nel repository né nel PC: se
 l'utente li ritrova, vanno aggiunti in `database/`.
@@ -227,6 +242,11 @@ periodo nel periodo dopo.
 
 ## 10. Registro modifiche
 Le voci più recenti in alto. Una riga per ogni modifica pubblicata.
+
+- **25/10/2026** — **Rettifica cassa** (solo master) per allineare contanti e POS a
+  quanto c'è davvero; **versamenti in cassa** visibili e possibili solo al master
+  (bloccati anche nel database); **Giorgio** terzo socio, anche come "chi ha dato
+  i soldi" negli acconti. Migrazione **36**.
 
 - **24/10/2026 (sera)** — **Schermate da telefono**: menu con barra in alto e ☰ (prima
   occupava tutta la prima schermata e mancava Esci), Dipendenti che usciva dallo
