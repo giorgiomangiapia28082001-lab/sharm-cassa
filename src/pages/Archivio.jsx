@@ -24,6 +24,7 @@ const TIPI_MOVIMENTO = {
   prelievo_pos: 'Scarichi POS → contanti',
   versamento: 'Versamenti in cassa',
   incasso_b2b: 'Incassi Sadiki',
+  rettifica: 'Rettifiche cassa (conteggio reale)',
 }
 
 function Riga({ etichetta, valore, colore }) {
@@ -356,6 +357,10 @@ function descriviMovimento(m) {
   const fmt = (v, valuta) => (valuta === 'EUR' ? euro(v) : valuta === 'USD' ? dollari(v) : lire(v))
   if (m.tipo === 'cambio_valuta') return `${fmt(m.importo_da, m.valuta_da)} → ${fmt(m.importo_a, m.valuta_a)}`
   if (m.tipo === 'prelievo_pos') return `${lire(m.importo_pos)} dal POS ai contanti`
+  if (m.tipo === 'rettifica') {
+    const v = m.valuta_a ? Number(m.importo_a) : Number(m.importo_pos)
+    return `${v > 0 ? '+' : '−'} ${m.valuta_a ? fmt(Math.abs(v), m.valuta_a) + ' contanti' : lire(Math.abs(v)) + ' sul POS'}`
+  }
   if (m.tipo === 'versamento') {
     return Number(m.importo_pos) > 0 ? `${lire(m.importo_pos)} sul POS` : `+ ${fmt(m.importo_a, m.valuta_a)}`
   }

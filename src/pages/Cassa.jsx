@@ -33,6 +33,9 @@ export default function Cassa() {
   const [chiusuraDa, setChiusuraDa] = useState('')
   const [chiusuraA, setChiusuraA] = useState('')
   const [salvandoVersamento, setSalvandoVersamento] = useState(false)
+  // Rettifica (solo master): quanto c'è davvero, voce per voce. Vuoto = non toccare.
+  const [rettificaForm, setRettificaForm] = useState({ contanti_eur: '', contanti_egp: '', contanti_usd: '', saldo_pos_egp: '', note: '' })
+  const [salvandoRettifica, setSalvandoRettifica] = useState(false)
 
   const [periodoAperto, setPeriodoAperto] = useState(null)
   const [storicoPeriodi, setStoricoPeriodi] = useState([])
@@ -194,6 +197,59 @@ export default function Cassa() {
     if (!error) {
       toast.success('Versamento registrato.')
       setVersamentoForm({ valuta: 'EUR', importo: '', note: '' })
+      carica()
+    }
+  }
+
+  // ── Rettifica cassa (solo master) ──
+  // Il master scrive quanto c'è realmente; registriamo la DIFFERENZA con
+  // l'app come movimento 'rettifica' (anche negativa), una riga per voce.
+  // Contanti: valuta_a + importo_a. POS: importo_pos con valuta_a vuota
+  // (così il database lo distingue dai contanti in LE, migrazione 36).
+  const VOCI_RETTIFICA = [
+    { campo: 'contanti_eur', etichetta: 'Contanti €', valuta: 'EUR', fmt: (v) => `€ ${v.toFixed(2)}` },
+    { campo: 'contanti_egp', etichetta: 'Contanti LE', valuta: 'EGP', fmt: (v) => `${v.toFixed(0)} LE` },
+    { campo: 'contanti_usd', etichetta: 'Contanti $', valuta: 'USD', fmt: (v) => `$ ${v.toFixed(2)}` },
+    { campo: 'saldo_pos_egp', etichetta: 'Saldo POS', valuta: null, fmt: (v) => `${v.toFixed(0)} LE` },
+  ]
+
+  const differenzeRettifica = saldo
+    ? VOCI_RETTIFICA
+        .filter((v) => rettificaForm[v.campo] !== '' && !Number.isNaN(Number(rettificaForm[v.campo])))
+        .map((v) => {
+          const app = Number(saldo[v.campo])
+          const reale = Number(rettificaForm[v.campo])
+          return { ...v, app, reale, diff: Math.round((reale - app) * 100) / 100 }
+        })
+        .filter((v) => v.diff !== 0)
+    : []
+
+  async function salvaRettifica(e) {
+    e.preventDefault()
+    if (differenzeRettifica.length === 0) {
+      toast.warning('Nessuna differenza da registrare: i valori scritti sono uguali a quelli dell\'app.')
+      return
+    }
+    const riepilogo = differenzeRettifica
+      .map((v) => `${v.etichetta}: l'app dice ${v.fmt(v.app)}, in realtà ${v.fmt(v.reale)} (${v.diff > 0 ? '+' : ''}${v.fmt(v.diff)})`)
+      .join('\n')
+    if (!confirm(`Allineare la cassa a quanto hai contato?\n\n${riepilogo}\n\nVerrà registrata una rettifica per ogni voce.`)) return
+
+    setSalvandoRettifica(true)
+    const righe = differenzeRettifica.map((v) => ({
+      tipo: 'rettifica',
+      data: oggi(),
+      valuta_a: v.valuta,
+      importo_a: v.valuta ? v.diff : null,
+      importo_pos: v.valuta ? null : v.diff,
+      note: [`Conteggio reale ${v.fmt(v.reale)}, l'app diceva ${v.fmt(v.app)}`, rettificaForm.note].filter(Boolean).join(' · '),
+      inserito_da: profile.id,
+    }))
+    const { error } = await esegui(supabase.from('movimenti_cassa').insert(righe), toast, 'la rettifica della cassa')
+    setSalvandoRettifica(false)
+    if (!error) {
+      toast.success('Cassa allineata a quanto hai contato.')
+      setRettificaForm({ contanti_eur: '', contanti_egp: '', contanti_usd: '', saldo_pos_egp: '', note: '' })
       carica()
     }
   }
@@ -362,7 +418,45 @@ export default function Cassa() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginBottom: 28 }}>
+      {/* ── Rettifica cassa: solo master ── */}
+      {isMaster && saldo && (
+        <form onSubmit={salvaRettifica} className="card" style={{ marginBottom: 20, borderLeft: '4px solid var(--notte)' }}>
+          <h3 style={{ fontSize: 15, marginBottom: 4, fontFamily: 'var(--font-body)', fontWeight: 700 }}>🔧 Rettifica cassa <span className="tag" style={{ marginLeft: 6 }}>solo Master</span></h3>
+          <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginTop: 4, marginBottom: 14 }}>
+            Se il conteggio non torna, scrivi quanto c'è <strong>davvero</strong>. L'app registra la differenza come rettifica e il saldo diventa quello reale. Lascia vuoto quello che non vuoi toccare.
+          </p>
+          <div className="form-grid">
+            {VOCI_RETTIFICA.map((v) => {
+              const d = differenzeRettifica.find((x) => x.campo === v.campo)
+              return (
+                <div key={v.campo} className="field">
+                  <label>{v.etichetta} reali</label>
+                  <input
+                    type="number" step="0.01" inputMode="decimal"
+                    value={rettificaForm[v.campo]}
+                    onChange={(e) => setRettificaForm((f) => ({ ...f, [v.campo]: e.target.value }))}
+                    placeholder={`app: ${v.fmt(Number(saldo[v.campo]))}`}
+                  />
+                  {d && (
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: d.diff < 0 ? 'var(--corallo)' : 'var(--smeraldo)' }}>
+                      differenza {d.diff > 0 ? '+' : ''}{v.fmt(d.diff)}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label>Motivo (facoltativo)</label>
+            <input type="text" value={rettificaForm.note} onChange={(e) => setRettificaForm((f) => ({ ...f, note: e.target.value }))} placeholder="es. conteggio di fine serata" />
+          </div>
+          <button type="submit" className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={salvandoRettifica || differenzeRettifica.length === 0}>
+            {salvandoRettifica ? 'Salvataggio…' : 'Allinea la cassa'}
+          </button>
+        </form>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))', gap: 20, marginBottom: 28 }}>
         <div className="card">
           <h3 style={{ fontSize: 15, marginBottom: 14, fontFamily: 'var(--font-body)', fontWeight: 700 }}>Cambio valuta</h3>
           <form onSubmit={salvaCambio}>
@@ -427,7 +521,9 @@ export default function Cassa() {
           </form>
         </div>
 
-        {/* ── Versamento in cassa ── */}
+        {/* ── Versamento in cassa: solo master (anche il database lo impedisce
+             agli altri, migrazione 36) ── */}
+        {isMaster && (
         <div className="card">
           <h3 style={{ fontSize: 15, marginBottom: 4, fontFamily: 'var(--font-body)', fontWeight: 700 }}>💰 Versamento in cassa</h3>
           <p style={{ fontSize: 13, color: 'var(--inchiostro-soft)', marginBottom: 16 }}>
@@ -456,6 +552,7 @@ export default function Cassa() {
             </button>
           </form>
         </div>
+        )}
 
       </div>
 
@@ -470,9 +567,15 @@ export default function Cassa() {
           {movimenti.map((m) => {
             const tipoLabel = m.tipo === 'cambio_valuta' ? 'Cambio valuta' :
               m.tipo === 'incasso_b2b' ? 'Incasso Sadiki' :
-              m.tipo === 'versamento' ? '💰 Versamento' : 'Prelievo POS'
+              m.tipo === 'versamento' ? '💰 Versamento' :
+              m.tipo === 'rettifica' ? '🔧 Rettifica' : 'Prelievo POS'
 
-            const dettaglio = m.tipo === 'cambio_valuta'
+            const segno = (v) => (Number(v) > 0 ? '+ ' : '− ')
+            const dettaglio = m.tipo === 'rettifica'
+              ? (m.valuta_a
+                ? `${segno(m.importo_a)}${VALUTE[m.valuta_a]} ${Math.abs(Number(m.importo_a)).toFixed(2)} contanti`
+                : `${segno(m.importo_pos)}${Math.abs(Number(m.importo_pos)).toFixed(0)} LE sul POS`)
+              : m.tipo === 'cambio_valuta'
               ? `${VALUTE[m.valuta_da]} ${Number(m.importo_da).toFixed(2)} → ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
               : m.tipo === 'incasso_b2b'
               ? `+ ${VALUTE[m.valuta_a]} ${Number(m.importo_a).toFixed(2)}`
@@ -501,7 +604,7 @@ export default function Cassa() {
 
                   {isMaster && (
                     <div style={{ display: 'flex', gap: 8, paddingTop: 10, borderTop: '1px solid var(--linea)' }}>
-                      {m.tipo !== 'incasso_b2b' && (
+                      {m.tipo !== 'incasso_b2b' && m.tipo !== 'rettifica' && (
                         <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setEditMovimento({
                           id: m.id, tipo: m.tipo, data: m.data,
                           importo_pos: m.importo_pos || '', importo_da: m.importo_da || '',

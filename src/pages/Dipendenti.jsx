@@ -863,6 +863,7 @@ export default function Dipendenti() {
                               <option value="direttore">Direttore / cassa ristorante</option>
                               <option value="gianluigi">Gianluigi</option>
                               <option value="luca">Luca</option>
+                              <option value="giorgio">Giorgio</option>
                             </select>
                           </div>
                         </div>
