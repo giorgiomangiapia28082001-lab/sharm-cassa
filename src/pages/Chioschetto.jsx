@@ -3,10 +3,13 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
-import { oggiLocale, confrontaStringhe } from '../lib/date'
+import { giornataServizio, confrontaStringhe } from '../lib/date'
+import { controllaDataSerata } from '../lib/anomalie'
+import ConfermaAnomalia from '../lib/ConfermaAnomalia'
 import { usePeriodoScelto, SceltaPeriodo, AvvisoArchivio, filtraPeriodo } from '../lib/periodi'
 
-const oggi = oggiLocale
+// Prima delle 5 del mattino si registra ancora la serata di ieri
+const oggi = giornataServizio
 
 const VUOTO = {
   data: oggi(),
@@ -29,6 +32,8 @@ export default function Chioschetto() {
   const [mostraForm, setMostraForm] = useState(!isViewer)
   const [editandoId, setEditandoId] = useState(null)
   const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
+  // Avviso sulla data della serata in attesa di conferma (null = nessuno)
+  const [anomalia, setAnomalia] = useState(null)
 
   async function carica() {
     setLoading(true)
@@ -94,16 +99,30 @@ export default function Chioschetto() {
     }
   }
 
-  async function salva(e) {
+  async function salva(e, forzato = false) {
     e.preventDefault()
-    setSalvando(true)
     const payload = costruisciPayload()
+
+    // Serata nuova: la data deve essere il giorno dopo l'ultima registrata
+    // e non deve esserci già (stesso controllo degli Incassi).
+    if (!forzato && !editandoId) {
+      setSalvando(true) // niente doppio tocco mentre si controlla la data
+      const avviso = await controllaDataSerata(supabase, 'incassi_chioschetto', payload.data)
+      if (avviso) {
+        setSalvando(false)
+        setAnomalia({ messaggio: avviso, e })
+        return
+      }
+    }
+
+    setSalvando(true)
 
     const risultato = editandoId
       ? await esegui(supabase.from('incassi_chioschetto').update(payload).eq('id', editandoId), toast, 'il salvataggio delle modifiche')
       : await esegui(supabase.from('incassi_chioschetto').insert({ ...payload, inserito_da: profile.id }), toast, 'il salvataggio dell\'incasso')
 
     setSalvando(false)
+    setAnomalia(null)
     if (!risultato.error) {
       toast.success(editandoId ? 'Modifiche salvate.' : 'Incasso salvato.')
       annullaForm()
@@ -300,6 +319,12 @@ export default function Chioschetto() {
           })}
         </div>
       )}
+
+      <ConfermaAnomalia
+        messaggio={anomalia?.messaggio}
+        onConferma={() => anomalia?.e && salva(anomalia.e, true)}
+        onAnnulla={() => setAnomalia(null)}
+      />
     </div>
   )
 }

@@ -7,9 +7,10 @@ import { useTassi, tassiSicuri } from '../lib/tassi'
 import { caricaAllegato } from '../lib/foto'
 import { usePeriodoScelto, SceltaPeriodo, AvvisoArchivio, filtraPeriodo } from '../lib/periodi'
 
-import { oggiLocale } from '../lib/date'
+import { giornataServizio } from '../lib/date'
 
-const oggi = oggiLocale
+// Prima delle 5 del mattino si registra ancora la serata di ieri
+const oggi = giornataServizio
 
 const VUOTO = {
   data: oggi(),
@@ -36,7 +37,7 @@ export default function Uscite() {
   const [editandoId, setEditandoId] = useState(null)
   const [editandoGeneratoDaAcconto, setEditandoGeneratoDaAcconto] = useState(false)
 
-  const [form, setForm] = useState(VUOTO)
+  const [form, setForm] = useState(() => ({ ...VUOTO, data: oggi() }))
 
   async function carica() {
     setLoading(true)
@@ -77,7 +78,7 @@ export default function Uscite() {
   }
 
   function annullaForm() {
-    setForm({ ...VUOTO, categoria_id: categorie[0]?.id || '' })
+    setForm({ ...VUOTO, data: oggi(), categoria_id: categorie[0]?.id || '' })
     setEditandoId(null)
     setEditandoGeneratoDaAcconto(false)
   }

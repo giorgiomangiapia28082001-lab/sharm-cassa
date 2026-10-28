@@ -8,9 +8,10 @@ import { esegui, avvisaSeOffline } from '../lib/operazioni'
 import { controllaCambioValuta } from '../lib/anomalie'
 import ConfermaAnomalia from '../lib/ConfermaAnomalia'
 
-import { oggiLocale } from '../lib/date'
+import { giornataServizio } from '../lib/date'
 
-const oggi = oggiLocale
+// Prima delle 5 del mattino si registra ancora la serata di ieri
+const oggi = giornataServizio
 
 const VALUTE = { EUR: '€', USD: '$', EGP: 'LE' }
 

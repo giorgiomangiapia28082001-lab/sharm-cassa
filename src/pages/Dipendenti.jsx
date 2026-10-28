@@ -4,9 +4,10 @@ import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
 
-import { oggiLocale, primoGiornoMeseLocale } from '../lib/date'
+import { giornataServizio, primoGiornoMeseLocale } from '../lib/date'
 
-const oggi = oggiLocale
+// Prima delle 5 del mattino si registra ancora la serata di ieri
+const oggi = giornataServizio
 
 export default function Dipendenti() {
   const { profile, isMaster, isViewer, puoInserire} = useAuth()

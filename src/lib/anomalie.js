@@ -11,10 +11,15 @@
 //    in Impostazioni → probabile errore di digitazione (uno zero in più/meno,
 //    o importo_da/importo_a invertiti).
 //
+// 3. Data di una serata nuova che non è il giorno dopo l'ultima registrata,
+//    o che c'è già → serata sul giorno sbagliato o inserita due volte.
+//
 // Questi controlli NON bloccano il salvataggio: mostrano un avviso e
 // chiedono conferma esplicita, perché un'operazione insolita ma reale
 // (es. una grande festa privata) deve comunque poter essere registrata.
 // ============================================================================
+
+import { giornoDopo, giornoLeggibile } from './date'
 
 // Range plausibile di spesa a persona per un ristorante come questo.
 // Volutamente larghi per non disturbare in casi legittimi (gruppi grandi,
@@ -99,5 +104,35 @@ export function controllaCambioValuta(valutaDa, importoDa, valutaA, importoA, ta
     )
   }
 
+  return null
+}
+
+/**
+ * Controlla la data di una serata nuova (incassi o chioschetto) rispetto a
+ * quelle già registrate da tutti (funzione del database, migrazione 37):
+ * - se per quel giorno c'è già una serata → probabile doppione;
+ * - se non è il giorno dopo l'ultima serata registrata → data da controllare
+ *   (giorno saltato, o serata messa sul giorno sbagliato).
+ * Ritorna una stringa con l'avviso, oppure null se tutto ok (o se il
+ * controllo non si può fare, per non bloccare il salvataggio).
+ */
+export async function controllaDataSerata(supabase, tabella, data) {
+  const { data: righe, error } = await supabase.rpc('controlla_data_serata', { p_tabella: tabella, p_data: data })
+  if (error || !righe?.length) return null
+  const { ultima_data: ultima, gia_presente: giaPresente } = righe[0]
+
+  if (giaPresente) {
+    return (
+      `Per ${giornoLeggibile(data)} c'è già una serata registrata. ` +
+      `Se è la stessa serata la stai inserendo due volte: torna indietro e controlla la data.`
+    )
+  }
+  if (ultima && data !== giornoDopo(ultima)) {
+    return (
+      `L'ultima serata registrata è di ${giornoLeggibile(ultima)}, quindi questa dovrebbe essere di ` +
+      `${giornoLeggibile(giornoDopo(ultima))}, ma la data scritta è ${giornoLeggibile(data)}. ` +
+      `Controlla la data prima di confermare.`
+    )
+  }
   return null
 }

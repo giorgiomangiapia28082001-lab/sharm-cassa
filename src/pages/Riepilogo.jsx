@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { primoGiornoMeseLocale } from '../lib/date'
-import { conFondoIeri, eurSalaReale } from '../lib/calcoli'
+import { conFondoIeri, eurSalaReale, caricaFondoPrima } from '../lib/calcoli'
 import { usePeriodoScelto, SceltaPeriodo, filtraPeriodo } from '../lib/periodi'
 
 const primoGiornoMese = primoGiornoMeseLocale
@@ -20,6 +20,7 @@ export default function Riepilogo() {
   const [speseFisseNonPagate, setSpeseFisseNonPagate] = useState([])
   const [targetData, setTargetData] = useState(null)
   const [movimentiCambio, setMovimentiCambio] = useState([])
+  const [fondoPrima, setFondoPrima] = useState(0)
 
   async function caricaSpeseFisse() {
     const mese = primoGiornoMese()
@@ -92,17 +93,19 @@ export default function Riepilogo() {
 
   async function carica() {
     setLoading(true)
-    const [{ data: inc }, { data: chio }, { data: usc }, { data: t }, { data: mov }] = await Promise.all([
+    const [{ data: inc }, { data: chio }, { data: usc }, { data: t }, { data: mov }, fondo] = await Promise.all([
       filtraPeriodo(supabase.from('incassi').select('*'), per.periodo).order('data'),
       filtraPeriodo(supabase.from('incassi_chioschetto').select('*'), per.periodo).order('data'),
       filtraPeriodo(supabase.from('uscite').select('*'), per.periodo),
       supabase.from('tassi_cambio').select('*').order('created_at', { ascending: false }).limit(1),
       filtraPeriodo(supabase.from('movimenti_cassa').select('*').eq('tipo', 'cambio_valuta'), per.periodo).order('data'),
+      caricaFondoPrima(supabase, per.periodo),
     ])
     setIncassi(inc || [])
     setChioschetto(chio || [])
     setUscite(usc || [])
     setMovimentiCambio(mov || [])
+    setFondoPrima(fondo)
     const t0 = t && t.length ? t[0] : { eur_usd: 1.08, eur_egp: 60 }
     if (t && t.length) setTassi(t0)
     setLoading(false)
@@ -118,7 +121,7 @@ export default function Riepilogo() {
   // Cioè: per ogni giorno, sommiamo (eur_contanti + bonifici + fondo_cassa)
   // e sottraiamo il fondo_cassa del giorno PRECEDENTE (che era già incluso nei contanti).
   // Ordiniamo per data per trovare il giorno precedente.
-  const incassiConFondo = conFondoIeri(incassi)
+  const incassiConFondo = conFondoIeri(incassi, fondoPrima)
   const totIncassiEur = incassiConFondo.reduce((acc, x) => acc + eurSalaReale(x), 0)
   const totIncassiUsd = incassi.reduce((a, r) => a + Number(r.usd_contanti), 0)
   const totIncassiEgp = incassi.reduce((a, r) => a + Number(r.egp_pos) + Number(r.egp_contanti), 0)

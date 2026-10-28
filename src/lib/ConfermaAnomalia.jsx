@@ -31,7 +31,7 @@ export default function ConfermaAnomalia({ messaggio, onConferma, onAnnulla }) {
           <span style={{ fontSize: 22 }}>⚠️</span>
           <h3 style={{ fontSize: 16, color: 'var(--notte)' }}>Dato insolito rilevato</h3>
         </div>
-        <p style={{ fontSize: 13.5, color: 'var(--inchiostro-soft)', lineHeight: 1.5, marginBottom: 20 }}>
+        <p style={{ fontSize: 13.5, color: 'var(--inchiostro-soft)', lineHeight: 1.5, marginBottom: 20, whiteSpace: 'pre-line' }}>
           {messaggio}
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
