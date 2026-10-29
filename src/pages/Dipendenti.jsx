@@ -138,7 +138,7 @@ export default function Dipendenti() {
     const mappa = {}
     function riga(id) {
       if (!mappa[id]) {
-        mappa[id] = { presenti: 0, parziali: 0, assenti: 0, mattine: 0, accEur: 0, accEgp: 0, acconti: [] }
+        mappa[id] = { presenti: 0, parziali: 0, assenti: 0, mattine: 0, accEur: 0, accEgp: 0, acconti: [], dateParziali: [] }
       }
       return mappa[id]
     }
@@ -146,7 +146,7 @@ export default function Dipendenti() {
     ;(pres || []).forEach((p) => {
       const r = riga(p.dipendente_id)
       if (p.stato === 'presente') r.presenti++
-      else if (p.stato === 'parziale') r.parziali++
+      else if (p.stato === 'parziale') { r.parziali++; r.dateParziali.push(p.data) }
       else if (p.stato === 'assente') r.assenti++
       if (p.mattina) r.mattine++
     })
@@ -161,6 +161,7 @@ export default function Dipendenti() {
     // Ordina gli acconti dal più recente
     Object.values(mappa).forEach((r) => {
       r.acconti.sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')))
+      r.dateParziali.sort()
     })
 
     setRiepilogoPeriodo({ da: periodoDa, a: periodoA, mappa })
@@ -443,16 +444,18 @@ export default function Dipendenti() {
 
           {riepilogoPeriodo && (() => {
             const lista = dipendenti.filter((d) => (mostraExDipendenti ? !d.attivo : d.attivo))
-            const vuoto = { presenti: 0, parziali: 0, assenti: 0, mattine: 0, accEur: 0, accEgp: 0, acconti: [] }
+            const vuoto = { presenti: 0, parziali: 0, assenti: 0, mattine: 0, accEur: 0, accEgp: 0, acconti: [], dateParziali: [] }
 
             // Totali generali del periodo
+            // I giorni parziali contano 0, come nello stipendio del mese: si mostrano a parte per decidere
             const totali = lista.reduce((acc, d) => {
               const r = riepilogoPeriodo.mappa[d.id] || vuoto
               acc.eur += r.accEur
               acc.egp += r.accEgp
-              acc.giorni += r.presenti + r.parziali * 0.5
+              acc.giorni += r.presenti
+              acc.parziali += r.parziali
               return acc
-            }, { eur: 0, egp: 0, giorni: 0 })
+            }, { eur: 0, egp: 0, giorni: 0, parziali: 0 })
 
             return (
               <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--linea)' }}>
@@ -464,8 +467,14 @@ export default function Dipendenti() {
                 <div className="stats-grid" style={{ marginBottom: 18 }}>
                   <div className="stat-card">
                     <div className="stat-label">Giorni lavorati (tutti)</div>
-                    <div className="stat-value">{totali.giorni % 1 === 0 ? totali.giorni : totali.giorni.toFixed(1)}</div>
+                    <div className="stat-value">{totali.giorni}</div>
                   </div>
+                  {totali.parziali > 0 && (
+                    <div className="stat-card">
+                      <div className="stat-label">Giorni parziali da decidere</div>
+                      <div className="stat-value" style={{ color: '#8a6a2b' }}>½ {totali.parziali}</div>
+                    </div>
+                  )}
                   <div className="stat-card">
                     <div className="stat-label">Acconti dati (EUR)</div>
                     <div className="stat-value">€ {totali.eur.toFixed(2)}</div>
@@ -480,7 +489,7 @@ export default function Dipendenti() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {lista.map((d) => {
                     const r = riepilogoPeriodo.mappa[d.id] || vuoto
-                    const giorniEquivalenti = r.presenti + r.parziali * 0.5
+                    const giorniEquivalenti = r.presenti
                     const nessunDato = r.presenti === 0 && r.parziali === 0 && r.assenti === 0 && r.accEur === 0 && r.accEgp === 0
 
                     return (
@@ -505,9 +514,7 @@ export default function Dipendenti() {
                           {!nessunDato && (
                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
                               <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)' }}>Giorni lavorati</div>
-                              <div style={{ fontWeight: 800, fontSize: 18 }}>
-                                {giorniEquivalenti % 1 === 0 ? giorniEquivalenti : giorniEquivalenti.toFixed(1)}
-                              </div>
+                              <div style={{ fontWeight: 800, fontSize: 18 }}>{giorniEquivalenti}</div>
                               <div style={{ fontSize: 11, color: 'var(--inchiostro-soft)', marginTop: 6 }}>Già ricevuto</div>
                               {r.accEur > 0 && <div style={{ fontWeight: 700, color: 'var(--corallo)' }}>€ {r.accEur.toFixed(2)}</div>}
                               {r.accEgp > 0 && <div style={{ fontWeight: 700, color: 'var(--corallo)' }}>{r.accEgp.toFixed(0)} LE</div>}
@@ -515,6 +522,13 @@ export default function Dipendenti() {
                             </div>
                           )}
                         </div>
+
+                        {r.dateParziali.length > 0 && (
+                          <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, fontSize: 12.5, background: 'rgba(232,199,146,0.25)', color: '#8a6a2b' }}>
+                            <strong>½ Giorni parziali (non contati):</strong>{' '}
+                            {r.dateParziali.map((dt) => new Date(dt + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })).join(', ')}
+                          </div>
+                        )}
 
                         {/* Dettaglio acconti del periodo */}
                         {r.acconti.length > 0 && (
@@ -545,7 +559,7 @@ export default function Dipendenti() {
                 </div>
 
                 <p style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 14, marginBottom: 0 }}>
-                  I giorni parziali contano come mezza giornata. I turni mattina sono indicati a parte e non aumentano il conteggio dei giorni.
+                  I giorni parziali non vengono contati (come nello stipendio del mese): sono elencati a parte per decidere caso per caso. I turni mattina sono indicati a parte e non aumentano il conteggio dei giorni.
                 </p>
               </div>
             )
