@@ -15,11 +15,16 @@ import { confrontaStringhe } from './date'
  *
  * Prima l'ordine era solo per ora di inserimento: se una serata veniva
  * inserita in ritardo, il "giorno prima" risultava sbagliato.
+ *
+ * `fondoPrima` è il fondo dell'ultima serata del periodo precedente (dal
+ * database, fondo_prima_del_periodo): dopo una chiusura quel fondo resta nel
+ * cassetto, quindi la prima serata del periodo nuovo lo deve togliere.
+ * È la stessa regola del saldo in Cassa (migrazione 37).
  */
-export function conFondoIeri(incassi) {
+export function conFondoIeri(incassi, fondoPrima = 0) {
   return [...incassi]
     .sort((a, b) => confrontaStringhe(a.data, b.data) || confrontaStringhe(a.created_at, b.created_at))
-    .map((r, i, arr) => ({ r, fondoIeri: i > 0 ? Number(arr[i - 1].fondo_cassa) : 0 }))
+    .map((r, i, arr) => ({ r, fondoIeri: i > 0 ? Number(arr[i - 1].fondo_cassa) : Number(fondoPrima) || 0 }))
 }
 
 /** Incasso reale in euro della sala (senza delivery) per una riga. */
@@ -28,8 +33,8 @@ export function eurSalaReale({ r, fondoIeri }) {
 }
 
 /** Totali per valuta di un elenco di incassi del ristorante. */
-export function totaliIncassi(incassi) {
-  const righe = conFondoIeri(incassi)
+export function totaliIncassi(incassi, fondoPrima = 0) {
+  const righe = conFondoIeri(incassi, fondoPrima)
   const somma = (campo) => incassi.reduce((a, r) => a + Number(r[campo] || 0), 0)
   return {
     eurSala: righe.reduce((a, x) => a + eurSalaReale(x), 0),
@@ -53,4 +58,14 @@ export function totaliChioschetto(righe) {
     usd: somma('usd_contanti'),
     giorni: righe.length,
   }
+}
+
+/**
+ * Fondo cassa dell'ultima serata prima del periodo (0 se non c'è, o se la
+ * funzione della migrazione 37 non è ancora sul database).
+ */
+export async function caricaFondoPrima(supabase, periodo) {
+  if (!periodo) return 0
+  const { data, error } = await supabase.rpc('fondo_prima_del_periodo', { p_periodo_id: periodo.id })
+  return error ? 0 : Number(data) || 0
 }

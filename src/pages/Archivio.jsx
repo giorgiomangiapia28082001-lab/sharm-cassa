@@ -5,7 +5,7 @@ import { useToast } from '../lib/Toast'
 import { esegui } from '../lib/operazioni'
 import { useTassi, tassiSicuri } from '../lib/tassi'
 import { usePeriodoScelto, etichettaPeriodo, giornoPeriodo } from '../lib/periodi'
-import { totaliIncassi, totaliChioschetto } from '../lib/calcoli'
+import { totaliIncassi, totaliChioschetto, caricaFondoPrima } from '../lib/calcoli'
 
 // ============================================================================
 // Archivio periodi: ogni periodo di cassa è una "cartella" con il riepilogo
@@ -66,7 +66,7 @@ export default function Archivio() {
   async function carica(p) {
     setLoading(true)
     const filtro = (q) => q.eq('periodo_cassa_id', p.id)
-    const [inc, chio, usc, mov, acc, saldo] = await Promise.all([
+    const [inc, chio, usc, mov, acc, saldo, fondoPrima] = await Promise.all([
       esegui(filtro(supabase.from('incassi').select('*')), toast, 'il caricamento degli incassi'),
       esegui(filtro(supabase.from('incassi_chioschetto').select('*')), toast, 'il caricamento del chioschetto'),
       esegui(filtro(supabase.from('uscite').select('*, categorie_uscite(nome)')), toast, 'il caricamento delle uscite'),
@@ -75,6 +75,7 @@ export default function Archivio() {
       // Saldo ricalcolato dalle voci (migrazione 32). Se la funzione non c'è
       // ancora sul database, si usa la fotografia salvata alla chiusura.
       esegui(supabase.rpc('saldo_periodo_cassa', { p_periodo_id: p.id }).maybeSingle(), toast, 'il calcolo del saldo', { silenzioso: true }),
+      caricaFondoPrima(supabase, p),
     ])
     setDati({
       incassi: inc.data || [],
@@ -83,6 +84,7 @@ export default function Archivio() {
       movimenti: mov.data || [],
       acconti: acc.data || [],
       saldo: saldo.error ? null : saldo.data,
+      fondoPrima,
     })
     setLoading(false)
   }
@@ -163,7 +165,7 @@ export default function Archivio() {
 
 function CartellaPeriodo({ periodo, dati, inEur }) {
   const link = (pagina) => `/${pagina}?periodo=${periodo.id}`
-  const inc = totaliIncassi(dati.incassi)
+  const inc = totaliIncassi(dati.incassi, dati.fondoPrima)
   const chio = totaliChioschetto(dati.chioschetto)
 
   // ── Uscite per valuta, categoria e metodo ──

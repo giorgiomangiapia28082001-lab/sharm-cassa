@@ -3,14 +3,15 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
-import { controllaPrezzoPersona } from '../lib/anomalie'
+import { controllaPrezzoPersona, controllaDataSerata } from '../lib/anomalie'
 import ConfermaAnomalia from '../lib/ConfermaAnomalia'
 import { usePeriodoScelto, SceltaPeriodo, AvvisoArchivio, filtraPeriodo } from '../lib/periodi'
 
-import { oggiLocale } from '../lib/date'
-import { conFondoIeri } from '../lib/calcoli'
+import { giornataServizio } from '../lib/date'
+import { conFondoIeri, caricaFondoPrima } from '../lib/calcoli'
 
-const oggi = oggiLocale
+// Prima delle 5 del mattino si registra ancora la serata di ieri
+const oggi = giornataServizio
 
 const VUOTO = {
   data: oggi(),
@@ -37,13 +38,14 @@ export default function Incassi() {
   const [mostraForm, setMostraForm] = useState(!isViewer)
   const [editandoId, setEditandoId] = useState(null)
   const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
+  const [fondoPrima, setFondoPrima] = useState(0)
   // Messaggio di anomalia in attesa di conferma da parte dell'utente
   // (es. prezzo a persona fuori scala). null = nessuna anomalia in sospeso.
   const [anomalia, setAnomalia] = useState(null)
 
   async function carica() {
     setLoading(true)
-    const [{ data, error }, { data: t, error: errT }] = await Promise.all([
+    const [{ data, error }, { data: t, error: errT }, fondo] = await Promise.all([
       esegui(
         filtraPeriodo(supabase.from('incassi').select('*, profiles:inserito_da(nome)'), per.periodo).order('data', { ascending: false }),
         toast,
@@ -54,8 +56,10 @@ export default function Incassi() {
         toast,
         'il caricamento dei tassi di cambio'
       ),
+      caricaFondoPrima(supabase, per.periodo),
     ])
     if (!error) setRighe(data || [])
+    setFondoPrima(fondo)
     if (!errT && t && t.length) setTassi(t[0])
     setLoading(false)
   }
@@ -129,9 +133,16 @@ export default function Incassi() {
         (payload.egp_pos + payload.egp_contanti + payload.delivery_egp) / eurEgpRate +
         payload.usd_contanti / eurUsdRate
 
-      const messaggioAnomalia = controllaPrezzoPersona(totaleStimatoEur, payload.numero_persone)
-      if (messaggioAnomalia) {
-        setAnomalia({ messaggio: messaggioAnomalia, e })
+      // Solo per una serata nuova: la data deve essere il giorno dopo
+      // l'ultima serata registrata e non deve esserci già.
+      setSalvando(true) // niente doppio tocco mentre si controlla la data
+      const avvisi = [
+        controllaPrezzoPersona(totaleStimatoEur, payload.numero_persone),
+        editandoId ? null : await controllaDataSerata(supabase, 'incassi', payload.data),
+      ].filter(Boolean)
+      if (avvisi.length) {
+        setSalvando(false)
+        setAnomalia({ messaggio: avvisi.join('\n\n'), e })
         return
       }
     }
@@ -168,8 +179,8 @@ export default function Incassi() {
   // Calcolo pesante (sort + fondo cassa giorno precedente) fatto una sola
   // volta per ogni cambio di dati, invece che ad ogni render della pagina.
   const righeConFondoIeri = useMemo(() => {
-    return conFondoIeri(righe).reverse()
-  }, [righe])
+    return conFondoIeri(righe, fondoPrima).reverse()
+  }, [righe, fondoPrima])
 
   return (
     <div>
