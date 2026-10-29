@@ -93,7 +93,10 @@ serve ricaricare la pagina.
 ### Ruoli utente (tabella `profiles`, colonna `ruolo`)
 - **master** — può tutto (unico che può modificare ed eliminare)
 - **proprietario** — vede tutto e aggiunge tutto, non modifica né elimina
-- **operatore** — inserisce incassi, uscite, presenze, movimenti
+- **operatore** — inserisce incassi, uscite, presenze, movimenti; vede tutti gli
+  incassi e le uscite, anche degli altri (visione comune, migrazione 38). Il nome
+  di chi ha inserito le righe altrui gli resta vuoto (`profiles` la vedono solo
+  master e proprietario)
 - **viewer** — sola lettura
 
 ## 5. Concetti da capire prima di toccare qualsiasi cosa
@@ -176,6 +179,7 @@ delle sessioni di luglio-settembre 2026.
 | 34 | Acconti nel periodo giusto alla chiusura + correzione di 11 acconti di ottobre | ✅ eseguita il 24/10/2026 |
 | 35 | Inventario: tabelle `inventario_articoli` e `inventario_conteggi` con permessi | ✅ eseguita il 24/10/2026, permessi provati per ogni ruolo |
 | 36 | Movimento `rettifica` nel saldo; versamenti e rettifiche solo master; socio Giorgio (anche negli acconti) | ✅ eseguita il 25/10/2026, saldi identici, permessi provati |
+| 38 | L'operatore vede tutti gli incassi, chioschetto e uscite (solo lettura) | ✅ eseguita il 29/10/2026, provata come operatore: vede 115 incassi, 86 chioschetto, 1.395 uscite; spese soci sempre nascoste |
 | 37 | Fondo cassa con una sola formula nel saldo; `fondo_prima_del_periodo`; `controlla_data_serata` | ✅ eseguita il 29/10/2026: contanti € periodo 7 da 9.586,50 a 9.468,00 (−118,50), il resto identico; i periodi chiusi tengono la foto salvata |
 
 I file delle migrazioni 29, 30 e 31 non sono né nel repository né nel PC: se
@@ -250,9 +254,8 @@ periodo prima.
 
 ## 9. Backlog
 - Audit completo del 28/10/2026: problemi e priorità sono in `RIEPILOGO_PER_PROMPT.md`
-  e nel recap dell'utente. Ancora da rispondere: l'operatore deve vedere tutti gli
-  incassi e le uscite o solo i suoi? Bonifici e Inventario/Spese soci: lasciati
-  così per ora (29/10/2026)
+  e nel recap dell'utente. Bonifici e Inventario/Spese soci: lasciati così per
+  ora (29/10/2026)
 - Controllo del ruolo **master** dentro `chiudi_periodo_cassa` e `annulla_chiusura_*`
   (oggi qualsiasi utente con accesso può chiamarle dal database)
 - Bucket `foto` pubblico: chi ha il link vede scontrini e allegati dei soci
@@ -271,6 +274,10 @@ periodo prima.
 
 ## 10. Registro modifiche
 Le voci più recenti in alto. Una riga per ogni modifica pubblicata.
+
+- **29/10/2026** — L'**operatore vede tutti** gli incassi, il chioschetto e le
+  uscite (prima solo i suoi, quindi totali vuoti). Solo lettura: modifiche ed
+  eliminazioni restano al master. Migrazione **38**.
 
 - **29/10/2026** — **Fondo cassa** con una sola formula anche nel saldo della Cassa
   (prima sommava i fondi di tutte le sere: −118,50 € nel periodo 7). **Data della
