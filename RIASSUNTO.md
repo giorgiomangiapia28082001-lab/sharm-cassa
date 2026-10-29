@@ -1,6 +1,6 @@
 # Riassunto del progetto – Sharm Cassa (ristorante a Sharm el-Sheikh)
 
-Aggiornato al 24/10/2026. Si legge direttamente dal repository (questo file è
+Aggiornato al 29/10/2026. Si legge direttamente dal repository (questo file è
 `RIASSUNTO.md`) oppure si incolla in una nuova chat con Claude.
 Va aggiornato dopo ogni modifica: vedi il **Registro modifiche** in fondo.
 
@@ -124,6 +124,23 @@ Quando il conteggio vero non torna, il master usa "Rettifica cassa": per ogni vo
 `valuta_a` vuota. Il saldo le somma (migrazione 36). Non si modificano: se sbagliata,
 si elimina e se ne fa un'altra.
 
+### Il fondo cassa (migrazione 37)
+Il fondo cassa € di una serata resta nel cassetto: si conta nell'incasso di quella
+serata e si toglie la serata dopo (i contanti contati la sera dopo lo comprendono
+già). Pagine e `saldo_periodo_cassa` usano la stessa regola. Il "fondo di ieri"
+della prima serata di un periodo è quello dell'ultima serata del periodo prima
+(`fondo_prima_del_periodo`).
+
+### Le date delle serate
+Gli incassi si inseriscono di notte: **fino alle 5 del mattino** l'app propone la
+serata appena finita (incassi, chioschetto, uscite, presenze, acconti, movimenti;
+`src/lib/date.js`). Se la data scelta non è il giorno dopo l'ultima serata o c'è
+già, l'app avvisa e chiede conferma (`controlla_data_serata`, migrazione 37).
+
+### Le giornate parziali dei dipendenti
+**Contano 0** sia nello stipendio del mese sia nel Riepilogo per periodo (deciso
+il 29/10/2026). Sono elencate a parte, con le date, per decidere caso per caso.
+
 ### I soci
 Sono **tre**: Gianluigi, Luca e Giorgio (tabella `soci`). Il valore `erogato_da` degli
 acconti accetta `direttore`, `gianluigi`, `luca`, `giorgio`: se l'acconto lo dà un
@@ -159,6 +176,7 @@ delle sessioni di luglio-settembre 2026.
 | 34 | Acconti nel periodo giusto alla chiusura + correzione di 11 acconti di ottobre | ✅ eseguita il 24/10/2026 |
 | 35 | Inventario: tabelle `inventario_articoli` e `inventario_conteggi` con permessi | ✅ eseguita il 24/10/2026, permessi provati per ogni ruolo |
 | 36 | Movimento `rettifica` nel saldo; versamenti e rettifiche solo master; socio Giorgio (anche negli acconti) | ✅ eseguita il 25/10/2026, saldi identici, permessi provati |
+| 37 | Fondo cassa con una sola formula nel saldo; `fondo_prima_del_periodo`; `controlla_data_serata` | ✅ eseguita il 29/10/2026: contanti € periodo 7 da 9.586,50 a 9.468,00 (−118,50), il resto identico; i periodi chiusi tengono la foto salvata |
 
 I file delle migrazioni 29, 30 e 31 non sono né nel repository né nel PC: se
 l'utente li ritrova, vanno aggiunti in `database/`.
@@ -205,6 +223,15 @@ incassi POS; una parte sono i 57.092 LE rimasti sul POS a fine periodo 6. Con
 l'azzeramento a ogni chiusura succede ogni volta che si scarica il POS di un
 periodo nel periodo dopo.
 
+### Saldo POS: come si procede (deciso il 29/10/2026)
+Non è un errore di calcolo: dall'inizio il POS fa in tutto +9.487 LE (al 28/10).
+Il negativo nasce dai residui rimasti sul POS alla chiusura (31.234 LE a fine
+periodo 1, 57.092 LE a fine periodo 6). L'utente, dopo ogni chiusura, registra a
+mano quanto è rimasto sul POS: **Cassa → Rettifica cassa → solo la casella "Saldo
+POS"** (non il fondo cassa, che è in euro). La rettifica cambia il saldo ma non è
+un'entrata. Facoltativo, se serve: promemoria in Cassa con il residuo POS del
+periodo prima.
+
 ## 8. Altre cose da sapere
 - **Foto dipendenti:** salvate come base64 dentro il database. Funzionano, ma andrebbero
   spostate su Storage (serve migrare i dati esistenti).
@@ -222,8 +249,10 @@ periodo nel periodo dopo.
   state rimosse (verificato: 0 tabelle rimaste).
 
 ## 9. Backlog
-- Saldo POS negativo dopo l'azzeramento (punto 7): decidere se lo scarico POS va
-  contato nel periodo degli incassi o se il POS va escluso dall'azzeramento
+- Audit completo del 28/10/2026: problemi e priorità sono in `RIEPILOGO_PER_PROMPT.md`
+  e nel recap dell'utente. Ancora da rispondere: l'operatore deve vedere tutti gli
+  incassi e le uscite o solo i suoi? Bonifici e Inventario/Spese soci: lasciati
+  così per ora (29/10/2026)
 - Controllo del ruolo **master** dentro `chiudi_periodo_cassa` e `annulla_chiusura_*`
   (oggi qualsiasi utente con accesso può chiamarle dal database)
 - Bucket `foto` pubblico: chi ha il link vede scontrini e allegati dei soci
@@ -242,6 +271,13 @@ periodo nel periodo dopo.
 
 ## 10. Registro modifiche
 Le voci più recenti in alto. Una riga per ogni modifica pubblicata.
+
+- **29/10/2026** — **Fondo cassa** con una sola formula anche nel saldo della Cassa
+  (prima sommava i fondi di tutte le sere: −118,50 € nel periodo 7). **Data della
+  serata**: fino alle 5 del mattino vale la serata appena finita; avviso con
+  conferma se la data non è il giorno dopo l'ultima serata o c'è già. **Giornate
+  parziali** a 0 anche nel Riepilogo per periodo dei Dipendenti, elencate a parte.
+  Migrazione **37**.
 
 - **25/10/2026** — **Rettifica cassa** (solo master) per allineare contanti e POS a
   quanto c'è davvero; **versamenti in cassa** visibili e possibili solo al master
