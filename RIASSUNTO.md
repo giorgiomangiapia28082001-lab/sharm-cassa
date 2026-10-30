@@ -275,6 +275,14 @@ periodo prima.
 ## 10. Registro modifiche
 Le voci più recenti in alto. Una riga per ogni modifica pubblicata.
 
+- **30/10/2026** — **Conferma prima di salvare:** uscite doppie nello stesso giorno,
+  importi lontani dal solito (oltre 5 volte o sotto un ottavo della stessa voce; per
+  le voci nuove, oltre 1,5 volte il massimo della categoria), incassi e chioschetto
+  confrontati con le ultime 60 serate, importi identici a una serata, persone mancanti
+  (`src/lib/anomalie.js`). La **data proposta** in un modulo lasciato aperto passa da
+  sola al giorno nuovo alle 5 (uscite, incassi, chioschetto). Il **modulo di modifica**
+  si apre sotto la riga scelta (`src/lib/ModuloInRiga.jsx`). Nessuna migrazione.
+
 - **29/10/2026** — L'**operatore vede tutti** gli incassi, il chioschetto e le
   uscite (prima solo i suoi, quindi totali vuoti). Solo lettura: modifiche ed
   eliminazioni restano al master. Migrazione **38**.
