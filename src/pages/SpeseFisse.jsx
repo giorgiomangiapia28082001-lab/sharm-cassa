@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ModuloInRiga from '../lib/ModuloInRiga'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
@@ -53,7 +54,6 @@ export default function SpeseFisse() {
       note: v.note || '',
     })
     setEditandoId(v.id)
-    setMostraForm(true)
   }
 
   async function salva(e) {
@@ -124,6 +124,57 @@ export default function SpeseFisse() {
   const simboloValuta = { EUR: '€', USD: '$', EGP: 'LE' }
   const oggiGiorno = new Date().getDate()
 
+  const moduloVoce = (
+    <form onSubmit={salva} className={editandoId ? undefined : 'card'} style={editandoId ? undefined : { marginBottom: 28 }}>
+      {editandoId && (
+        <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
+          Stai modificando una voce esistente (es. cambio casa o canone).
+        </div>
+      )}
+      <div className="form-grid">
+        <div className="field">
+          <label>Nome</label>
+          <input type="text" value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="es. Fitto locale, Casa Ahmed…" required />
+        </div>
+        <div className="field">
+          <label>Tipo</label>
+          <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}>
+            <option value="fitto_locale">Fitto locale</option>
+            <option value="casa_dipendente">Case dipendenti</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Importo</label>
+          <input type="number" step="0.01" value={form.importo} onChange={(e) => setForm((f) => ({ ...f, importo: e.target.value }))} placeholder="0.00" required />
+        </div>
+        <div className="field">
+          <label>Valuta</label>
+          <select value={form.valuta} onChange={(e) => setForm((f) => ({ ...f, valuta: e.target.value }))}>
+            <option value="EGP">Lire egiziane (LE)</option>
+            <option value="EUR">Euro (€)</option>
+            <option value="USD">Dollari ($)</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Giorno scadenza nel mese</label>
+          <input type="number" min="1" max="28" value={form.giorno_scadenza} onChange={(e) => setForm((f) => ({ ...f, giorno_scadenza: e.target.value }))} required />
+        </div>
+        <div className="field">
+          <label>Note</label>
+          <input type="text" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+        <button type="submit" className="btn btn-accent" disabled={salvando}>
+          {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Aggiungi voce'}
+        </button>
+        {editandoId && (
+          <button type="button" className="btn btn-ghost" onClick={annullaForm}>Annulla</button>
+        )}
+      </div>
+    </form>
+  )
+
   return (
     <div>
       <div className="page-header">
@@ -138,56 +189,7 @@ export default function SpeseFisse() {
         )}
       </div>
 
-      {puoInserire && mostraForm && (
-        <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
-          {editandoId && (
-            <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
-              Stai modificando una voce esistente (es. cambio casa o canone).
-            </div>
-          )}
-          <div className="form-grid">
-            <div className="field">
-              <label>Nome</label>
-              <input type="text" value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="es. Fitto locale, Casa Ahmed…" required />
-            </div>
-            <div className="field">
-              <label>Tipo</label>
-              <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}>
-                <option value="fitto_locale">Fitto locale</option>
-                <option value="casa_dipendente">Case dipendenti</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Importo</label>
-              <input type="number" step="0.01" value={form.importo} onChange={(e) => setForm((f) => ({ ...f, importo: e.target.value }))} placeholder="0.00" required />
-            </div>
-            <div className="field">
-              <label>Valuta</label>
-              <select value={form.valuta} onChange={(e) => setForm((f) => ({ ...f, valuta: e.target.value }))}>
-                <option value="EGP">Lire egiziane (LE)</option>
-                <option value="EUR">Euro (€)</option>
-                <option value="USD">Dollari ($)</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Giorno scadenza nel mese</label>
-              <input type="number" min="1" max="28" value={form.giorno_scadenza} onChange={(e) => setForm((f) => ({ ...f, giorno_scadenza: e.target.value }))} required />
-            </div>
-            <div className="field">
-              <label>Note</label>
-              <input type="text" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="opzionale" />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <button type="submit" className="btn btn-accent" disabled={salvando}>
-              {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Aggiungi voce'}
-            </button>
-            {editandoId && (
-              <button type="button" className="btn btn-ghost" onClick={annullaForm}>Annulla</button>
-            )}
-          </div>
-        </form>
-      )}
+      {puoInserire && mostraForm && !editandoId && moduloVoce}
 
       {loading ? (
         <p className="page-subtitle">Caricamento…</p>
@@ -254,6 +256,7 @@ export default function SpeseFisse() {
                           </>
                         )}
                       </div>
+                      {editandoId === v.id && <ModuloInRiga>{moduloVoce}</ModuloInRiga>}
                     </div>
                   )
                 })}

@@ -4,6 +4,8 @@
 // la data al giorno prima. Qui costruiamo le stringhe sempre usando i
 // valori LOCALI (anno/mese/giorno), senza passare da toISOString().
 
+import { useEffect, useRef } from 'react'
+
 export function oggiLocale() {
   const d = new Date()
   const anno = d.getFullYear()
@@ -29,6 +31,35 @@ export function giornataServizio() {
   const mese = String(d.getMonth() + 1).padStart(2, '0')
   const giorno = String(d.getDate()).padStart(2, '0')
   return `${anno}-${mese}-${giorno}`
+}
+
+/**
+ * Tiene aggiornata la data proposta in un modulo lasciato aperto (telefono in
+ * tasca dalla sera prima): alle 5 passa da sola al giorno nuovo. Una data
+ * scelta a mano non viene toccata, e nemmeno una riga in modifica.
+ */
+export function useDataServizioAggiornata(dataModulo, aggiorna, attivo) {
+  const proposta = useRef(giornataServizio())
+  const ultimi = useRef({})
+  ultimi.current = { dataModulo, aggiorna, attivo }
+
+  useEffect(() => {
+    function controlla() {
+      const nuova = giornataServizio()
+      if (nuova === proposta.current) return
+      const { dataModulo, aggiorna, attivo } = ultimi.current
+      if (attivo && dataModulo === proposta.current) aggiorna(nuova)
+      proposta.current = nuova
+    }
+    const timer = setInterval(controlla, 60000)
+    document.addEventListener('visibilitychange', controlla)
+    window.addEventListener('focus', controlla)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', controlla)
+      window.removeEventListener('focus', controlla)
+    }
+  }, [])
 }
 
 /** Il giorno dopo una data 'AAAA-MM-GG', nello stesso formato. */

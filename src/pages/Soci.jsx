@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ModuloInRiga from '../lib/ModuloInRiga'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
@@ -126,7 +127,6 @@ export default function Soci() {
       foto_url_esistente: s.foto_url || '',
     })
     setEditandoId(s.id)
-    setMostraForm(true)
   }
 
   async function salva(e) {
@@ -199,7 +199,6 @@ export default function Soci() {
       foto_url_esistente: v.foto_url || '',
     })
     setEditandoVersId(v.id)
-    setMostraFormVers(true)
   }
 
   async function salvaVersamento(e) {
@@ -270,6 +269,118 @@ export default function Soci() {
   const totVersEgp = versamentiDelPeriodo.reduce((a, v) => a + Number(v.importo_egp || 0), 0)
 
   const stoSiamoSuPeriodoPassato = !!periodoAperto && storicoPeriodi.some((p) => p.id === periodoAperto.id)
+
+  const moduloSpesa = (
+    <form onSubmit={salva} className={editandoId ? undefined : 'card'} style={editandoId ? undefined : { marginBottom: 28 }}>
+      {editandoId && (
+        <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
+          Stai modificando una spesa esistente.
+        </div>
+      )}
+      <div className="form-grid">
+        <div className="field">
+          <label>Socio</label>
+          <select value={form.socio_id} onChange={(e) => setForm((f) => ({ ...f, socio_id: e.target.value }))}>
+            {soci.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>Data</label>
+          <input type="date" value={form.data} onChange={(e) => setForm((f) => ({ ...f, data: e.target.value }))} required />
+        </div>
+        <div className="field" style={{ gridColumn: 'span 2' }}>
+          <label>Descrizione</label>
+          <input type="text" value={form.descrizione} onChange={(e) => setForm((f) => ({ ...f, descrizione: e.target.value }))} placeholder="opzionale" />
+        </div>
+        <div className="field">
+          <label>Importo €</label>
+          <input type="number" step="0.01" value={form.importo_eur} onChange={(e) => setForm((f) => ({ ...f, importo_eur: e.target.value }))} placeholder="0.00" />
+        </div>
+        <div className="field">
+          <label>Importo LE</label>
+          <input type="number" step="0.01" value={form.importo_egp} onChange={(e) => setForm((f) => ({ ...f, importo_egp: e.target.value }))} placeholder="0.00" />
+        </div>
+        <div className="field" style={{ gridColumn: 'span 2' }}>
+          <label>Allegato — foto o PDF (opzionale)</label>
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={(e) => setForm((f) => ({ ...f, allegato: e.target.files?.[0] || null }))}
+          />
+          {form.allegato && (
+            <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 4 }}>
+              Nuovo file selezionato: {form.allegato.name}
+            </div>
+          )}
+          {!form.allegato && form.foto_url_esistente && (
+            <div style={{ fontSize: 12, marginTop: 4 }}>
+              <a href={form.foto_url_esistente} target="_blank" rel="noreferrer">📎 Allegato attuale</a>
+              <span style={{ color: 'var(--inchiostro-soft)' }}> — scegli un file per sostituirlo</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+        <button type="submit" className="btn btn-accent" disabled={salvando}>
+          {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva spesa'}
+        </button>
+        {editandoId && (
+          <button type="button" className="btn btn-ghost" onClick={annullaForm}>
+            Annulla modifica
+          </button>
+        )}
+      </div>
+    </form>
+  )
+
+  const moduloVersamento = (
+    <form onSubmit={salvaVersamento} className={editandoVersId ? undefined : 'card'} style={editandoVersId ? undefined : { margin: '16px 0' }}>
+      <div className="form-grid">
+        <div className="field">
+          <label>Socio</label>
+          <select value={formVers.socio_id} onChange={(e) => setFormVers((f) => ({ ...f, socio_id: e.target.value }))} required>
+            <option value="">— scegli —</option>
+            {soci.map((so) => <option key={so.id} value={so.id}>{so.nome}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>Data</label>
+          <input type="date" value={formVers.data} onChange={(e) => setFormVers((f) => ({ ...f, data: e.target.value }))} required />
+        </div>
+        <div className="field" style={{ gridColumn: 'span 2' }}>
+          <label>Descrizione (opzionale)</label>
+          <input type="text" value={formVers.descrizione} onChange={(e) => setFormVers((f) => ({ ...f, descrizione: e.target.value }))} placeholder="es. contanti per pagamento fornitore" />
+        </div>
+        <div className="field">
+          <label>Importo €</label>
+          <input type="number" step="0.01" value={formVers.importo_eur} onChange={(e) => setFormVers((f) => ({ ...f, importo_eur: e.target.value }))} placeholder="0.00" />
+        </div>
+        <div className="field">
+          <label>Importo LE</label>
+          <input type="number" step="0.01" value={formVers.importo_egp} onChange={(e) => setFormVers((f) => ({ ...f, importo_egp: e.target.value }))} placeholder="0.00" />
+        </div>
+        <div className="field" style={{ gridColumn: 'span 2' }}>
+          <label>Allegato — foto o PDF (opzionale)</label>
+          <input type="file" accept="image/*,application/pdf" onChange={(e) => setFormVers((f) => ({ ...f, allegato: e.target.files?.[0] || null }))} />
+          {formVers.allegato && (
+            <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 4 }}>Nuovo file: {formVers.allegato.name}</div>
+          )}
+          {!formVers.allegato && formVers.foto_url_esistente && (
+            <div style={{ fontSize: 12, marginTop: 4 }}>
+              <a href={formVers.foto_url_esistente} target="_blank" rel="noreferrer">📎 Allegato attuale</a>
+              <span style={{ color: 'var(--inchiostro-soft)' }}> — scegli un file per sostituirlo</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button type="submit" className="btn btn-accent" disabled={salvandoVers}>
+          {salvandoVers ? 'Salvataggio…' : editandoVersId ? 'Salva modifiche' : 'Registra versamento'}
+        </button>
+        {editandoVersId && <button type="button" className="btn btn-ghost" onClick={annullaFormVers}>Annulla modifica</button>}
+      </div>
+    </form>
+  )
 
   return (
     <div>
@@ -423,68 +534,7 @@ export default function Soci() {
         ))}
       </div>
 
-      {puoInserire && mostraForm && (
-        <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
-          {editandoId && (
-            <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
-              Stai modificando una spesa esistente.
-            </div>
-          )}
-          <div className="form-grid">
-            <div className="field">
-              <label>Socio</label>
-              <select value={form.socio_id} onChange={(e) => setForm((f) => ({ ...f, socio_id: e.target.value }))}>
-                {soci.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Data</label>
-              <input type="date" value={form.data} onChange={(e) => setForm((f) => ({ ...f, data: e.target.value }))} required />
-            </div>
-            <div className="field" style={{ gridColumn: 'span 2' }}>
-              <label>Descrizione</label>
-              <input type="text" value={form.descrizione} onChange={(e) => setForm((f) => ({ ...f, descrizione: e.target.value }))} placeholder="opzionale" />
-            </div>
-            <div className="field">
-              <label>Importo €</label>
-              <input type="number" step="0.01" value={form.importo_eur} onChange={(e) => setForm((f) => ({ ...f, importo_eur: e.target.value }))} placeholder="0.00" />
-            </div>
-            <div className="field">
-              <label>Importo LE</label>
-              <input type="number" step="0.01" value={form.importo_egp} onChange={(e) => setForm((f) => ({ ...f, importo_egp: e.target.value }))} placeholder="0.00" />
-            </div>
-            <div className="field" style={{ gridColumn: 'span 2' }}>
-              <label>Allegato — foto o PDF (opzionale)</label>
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(e) => setForm((f) => ({ ...f, allegato: e.target.files?.[0] || null }))}
-              />
-              {form.allegato && (
-                <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 4 }}>
-                  Nuovo file selezionato: {form.allegato.name}
-                </div>
-              )}
-              {!form.allegato && form.foto_url_esistente && (
-                <div style={{ fontSize: 12, marginTop: 4 }}>
-                  <a href={form.foto_url_esistente} target="_blank" rel="noreferrer">📎 Allegato attuale</a>
-                  <span style={{ color: 'var(--inchiostro-soft)' }}> — scegli un file per sostituirlo</span>
-                </div>
-              )}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <button type="submit" className="btn btn-accent" disabled={salvando}>
-              {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva spesa'}
-            </button>
-            {editandoId && (
-              <button type="button" className="btn btn-ghost" onClick={annullaForm}>
-                Annulla modifica
-              </button>
-            )}
-          </div>
-        </form>
-      )}
+      {puoInserire && mostraForm && !editandoId && moduloSpesa}
 
       <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Spese del periodo corrente</h3>
 
@@ -525,6 +575,7 @@ export default function Soci() {
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaRiga(s.id)}>Elimina</button>
                 </div>
               )}
+              {editandoId === s.id && <ModuloInRiga>{moduloSpesa}</ModuloInRiga>}
             </div>
           ))}
         </div>
@@ -559,54 +610,7 @@ export default function Soci() {
           </div>
         )}
 
-        {puoInserire && mostraFormVers && (
-          <form onSubmit={salvaVersamento} className="card" style={{ margin: '16px 0' }}>
-            <div className="form-grid">
-              <div className="field">
-                <label>Socio</label>
-                <select value={formVers.socio_id} onChange={(e) => setFormVers((f) => ({ ...f, socio_id: e.target.value }))} required>
-                  <option value="">— scegli —</option>
-                  {soci.map((so) => <option key={so.id} value={so.id}>{so.nome}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>Data</label>
-                <input type="date" value={formVers.data} onChange={(e) => setFormVers((f) => ({ ...f, data: e.target.value }))} required />
-              </div>
-              <div className="field" style={{ gridColumn: 'span 2' }}>
-                <label>Descrizione (opzionale)</label>
-                <input type="text" value={formVers.descrizione} onChange={(e) => setFormVers((f) => ({ ...f, descrizione: e.target.value }))} placeholder="es. contanti per pagamento fornitore" />
-              </div>
-              <div className="field">
-                <label>Importo €</label>
-                <input type="number" step="0.01" value={formVers.importo_eur} onChange={(e) => setFormVers((f) => ({ ...f, importo_eur: e.target.value }))} placeholder="0.00" />
-              </div>
-              <div className="field">
-                <label>Importo LE</label>
-                <input type="number" step="0.01" value={formVers.importo_egp} onChange={(e) => setFormVers((f) => ({ ...f, importo_egp: e.target.value }))} placeholder="0.00" />
-              </div>
-              <div className="field" style={{ gridColumn: 'span 2' }}>
-                <label>Allegato — foto o PDF (opzionale)</label>
-                <input type="file" accept="image/*,application/pdf" onChange={(e) => setFormVers((f) => ({ ...f, allegato: e.target.files?.[0] || null }))} />
-                {formVers.allegato && (
-                  <div style={{ fontSize: 12, color: 'var(--inchiostro-soft)', marginTop: 4 }}>Nuovo file: {formVers.allegato.name}</div>
-                )}
-                {!formVers.allegato && formVers.foto_url_esistente && (
-                  <div style={{ fontSize: 12, marginTop: 4 }}>
-                    <a href={formVers.foto_url_esistente} target="_blank" rel="noreferrer">📎 Allegato attuale</a>
-                    <span style={{ color: 'var(--inchiostro-soft)' }}> — scegli un file per sostituirlo</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button type="submit" className="btn btn-accent" disabled={salvandoVers}>
-                {salvandoVers ? 'Salvataggio…' : editandoVersId ? 'Salva modifiche' : 'Registra versamento'}
-              </button>
-              {editandoVersId && <button type="button" className="btn btn-ghost" onClick={annullaFormVers}>Annulla modifica</button>}
-            </div>
-          </form>
-        )}
+        {puoInserire && mostraFormVers && !editandoVersId && moduloVersamento}
 
         {versamentiDelPeriodo.length === 0 ? (
           <div className="empty-state card" style={{ marginTop: 16 }}>
@@ -651,6 +655,7 @@ export default function Soci() {
                     <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto', color: 'var(--corallo)' }} onClick={() => eliminaVersamento(v.id)}>Elimina</button>
                   </div>
                 )}
+                {editandoVersId === v.id && <ModuloInRiga>{moduloVersamento}</ModuloInRiga>}
               </div>
             ))}
           </div>

@@ -3,11 +3,12 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
-import { controllaPrezzoPersona, controllaDataSerata } from '../lib/anomalie'
+import { controllaPrezzoPersona, controllaDataSerata, controllaSerata, totaleSerataEur } from '../lib/anomalie'
 import ConfermaAnomalia from '../lib/ConfermaAnomalia'
+import ModuloInRiga from '../lib/ModuloInRiga'
 import { usePeriodoScelto, SceltaPeriodo, AvvisoArchivio, filtraPeriodo } from '../lib/periodi'
 
-import { giornataServizio } from '../lib/date'
+import { giornataServizio, useDataServizioAggiornata } from '../lib/date'
 import { conFondoIeri, caricaFondoPrima } from '../lib/calcoli'
 
 // Prima delle 5 del mattino si registra ancora la serata di ieri
@@ -27,6 +28,18 @@ const VUOTO = {
   note: '',
 }
 
+// Voci confrontate con le serate precedenti per trovare gli importi insoliti
+const CAMPI_INCASSI = [
+  ['eur_contanti', 'Contanti €'],
+  ['fondo_cassa', 'Fondo cassa €'],
+  ['bonifici', 'Bonifici €'],
+  ['egp_pos', 'POS (carta) LE'],
+  ['egp_contanti', 'Contanti LE'],
+  ['usd_contanti', 'Dollari $'],
+  ['delivery_eur', 'Delivery €'],
+  ['delivery_egp', 'Delivery LE'],
+]
+
 export default function Incassi() {
   const { profile, isMaster, isViewer, puoInserire} = useAuth()
   const toast = useToast()
@@ -42,6 +55,8 @@ export default function Incassi() {
   // Messaggio di anomalia in attesa di conferma da parte dell'utente
   // (es. prezzo a persona fuori scala). null = nessuna anomalia in sospeso.
   const [anomalia, setAnomalia] = useState(null)
+
+  useDataServizioAggiornata(form.data, (data) => update('data', data), !editandoId)
 
   async function carica() {
     setLoading(true)
@@ -98,7 +113,6 @@ export default function Incassi() {
       note: r.note || '',
     })
     setEditandoId(r.id)
-    setMostraForm(true)
   }
 
   function costruisciPayload() {
@@ -126,19 +140,17 @@ export default function Incassi() {
     // in LE inseriti per errore nei campi in EUR). Se rilevata e non ancora
     // confermata dall'utente, mostriamo il dialogo e sospendiamo il salvataggio.
     if (!forzato) {
-      const eurEgpRate = Number(tassi.eur_egp) || 1
-      const eurUsdRate = Number(tassi.eur_usd) || 1
-      const totaleStimatoEur =
-        payload.eur_contanti + payload.bonifici + payload.delivery_eur +
-        (payload.egp_pos + payload.egp_contanti + payload.delivery_egp) / eurEgpRate +
-        payload.usd_contanti / eurUsdRate
+      const originale = editandoId ? righe.find((r) => r.id === editandoId) : null
+      const cambiato = !originale || Number(originale.numero_persone || 0) !== payload.numero_persone ||
+        CAMPI_INCASSI.some(([campo]) => Number(originale[campo] || 0) !== payload[campo])
 
       // Solo per una serata nuova: la data deve essere il giorno dopo
       // l'ultima serata registrata e non deve esserci già.
       setSalvando(true) // niente doppio tocco mentre si controlla la data
       const avvisi = [
-        controllaPrezzoPersona(totaleStimatoEur, payload.numero_persone),
+        cambiato ? controllaPrezzoPersona(totaleSerataEur(payload, tassi), payload.numero_persone) : null,
         editandoId ? null : await controllaDataSerata(supabase, 'incassi', payload.data),
+        ...(cambiato ? await controllaSerata(supabase, 'incassi', payload, CAMPI_INCASSI, tassi, editandoId) : []),
       ].filter(Boolean)
       if (avvisi.length) {
         setSalvando(false)
@@ -182,6 +194,98 @@ export default function Incassi() {
     return conFondoIeri(righe, fondoPrima).reverse()
   }, [righe, fondoPrima])
 
+  const moduloIncasso = (
+    <form onSubmit={salva} className={editandoId ? undefined : 'card'} style={editandoId ? undefined : { marginBottom: 28 }}>
+      {editandoId && (
+        <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
+          Stai modificando un incasso esistente (solo Master).
+        </div>
+      )}
+      <div className="form-grid">
+        <div className="field">
+          <label>Data</label>
+          <input type="date" value={form.data} onChange={(e) => update('data', e.target.value)} required />
+        </div>
+        <div className="field">
+          <label>N° persone servite</label>
+          <input type="number" min="0" value={form.numero_persone} onChange={(e) => update('numero_persone', e.target.value)} placeholder="0" />
+        </div>
+      </div>
+
+      <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
+        Euro (EUR)
+      </h3>
+      <div className="form-grid">
+        <div className="field">
+          <label>Contanti €</label>
+          <input type="number" step="0.01" value={form.eur_contanti} onChange={(e) => update('eur_contanti', e.target.value)} placeholder="0.00" />
+        </div>
+        <div className="field">
+          <label>Fondo cassa €</label>
+          <input type="number" step="0.01" value={form.fondo_cassa} onChange={(e) => update('fondo_cassa', e.target.value)} placeholder="0.00" />
+        </div>
+        <div className="field">
+          <label>Bonifici €</label>
+          <input type="number" step="0.01" value={form.bonifici} onChange={(e) => update('bonifici', e.target.value)} placeholder="0.00" />
+        </div>
+      </div>
+
+      <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
+        Lire egiziane (EGP) — valuta principale
+      </h3>
+      <div className="form-grid">
+        <div className="field">
+          <label>POS (carta) LE</label>
+          <input type="number" step="0.01" value={form.egp_pos} onChange={(e) => update('egp_pos', e.target.value)} placeholder="0.00" />
+        </div>
+        <div className="field">
+          <label>Contanti LE</label>
+          <input type="number" step="0.01" value={form.egp_contanti} onChange={(e) => update('egp_contanti', e.target.value)} placeholder="0.00" />
+        </div>
+      </div>
+
+      <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
+        Altre valute
+      </h3>
+      <div className="form-grid">
+        <div className="field">
+          <label>Dollari $ (contanti)</label>
+          <input type="number" step="0.01" value={form.usd_contanti} onChange={(e) => update('usd_contanti', e.target.value)} placeholder="0.00" />
+        </div>
+      </div>
+
+      <h3 style={{ fontSize: 15, color: 'var(--corallo)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700, borderTop: '1px dashed var(--linea)', paddingTop: 18 }}>
+        Delivery (separato dalla sala)
+      </h3>
+      <div className="form-grid">
+        <div className="field">
+          <label>Delivery €</label>
+          <input type="number" step="0.01" value={form.delivery_eur} onChange={(e) => update('delivery_eur', e.target.value)} placeholder="0.00" />
+        </div>
+        <div className="field">
+          <label>Delivery LE</label>
+          <input type="number" step="0.01" value={form.delivery_egp} onChange={(e) => update('delivery_egp', e.target.value)} placeholder="0.00" />
+        </div>
+      </div>
+
+      <div className="field" style={{ marginTop: 16 }}>
+        <label>Note (opzionale)</label>
+        <textarea rows="2" value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="Eventuali annotazioni sulla serata…" />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+        <button type="submit" className="btn btn-accent" disabled={salvando}>
+          {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva incasso'}
+        </button>
+        {editandoId && (
+          <button type="button" className="btn btn-ghost" onClick={annullaForm}>
+            Annulla modifica
+          </button>
+        )}
+      </div>
+    </form>
+  )
+
   return (
     <div>
       <div className="page-header">
@@ -201,97 +305,7 @@ export default function Incassi() {
 
       <AvvisoArchivio periodo={per.periodo} onTornaAlCorrente={() => per.scegli(null)} />
 
-      {puoInserire && mostraForm && (!per.inArchivio || editandoId) && (
-        <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
-          {editandoId && (
-            <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
-              Stai modificando un incasso esistente (solo Master).
-            </div>
-          )}
-          <div className="form-grid">
-            <div className="field">
-              <label>Data</label>
-              <input type="date" value={form.data} onChange={(e) => update('data', e.target.value)} required />
-            </div>
-            <div className="field">
-              <label>N° persone servite</label>
-              <input type="number" min="0" value={form.numero_persone} onChange={(e) => update('numero_persone', e.target.value)} placeholder="0" />
-            </div>
-          </div>
-
-          <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
-            Euro (EUR)
-          </h3>
-          <div className="form-grid">
-            <div className="field">
-              <label>Contanti €</label>
-              <input type="number" step="0.01" value={form.eur_contanti} onChange={(e) => update('eur_contanti', e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="field">
-              <label>Fondo cassa €</label>
-              <input type="number" step="0.01" value={form.fondo_cassa} onChange={(e) => update('fondo_cassa', e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="field">
-              <label>Bonifici €</label>
-              <input type="number" step="0.01" value={form.bonifici} onChange={(e) => update('bonifici', e.target.value)} placeholder="0.00" />
-            </div>
-          </div>
-
-          <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
-            Lire egiziane (EGP) — valuta principale
-          </h3>
-          <div className="form-grid">
-            <div className="field">
-              <label>POS (carta) LE</label>
-              <input type="number" step="0.01" value={form.egp_pos} onChange={(e) => update('egp_pos', e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="field">
-              <label>Contanti LE</label>
-              <input type="number" step="0.01" value={form.egp_contanti} onChange={(e) => update('egp_contanti', e.target.value)} placeholder="0.00" />
-            </div>
-          </div>
-
-          <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
-            Altre valute
-          </h3>
-          <div className="form-grid">
-            <div className="field">
-              <label>Dollari $ (contanti)</label>
-              <input type="number" step="0.01" value={form.usd_contanti} onChange={(e) => update('usd_contanti', e.target.value)} placeholder="0.00" />
-            </div>
-          </div>
-
-          <h3 style={{ fontSize: 15, color: 'var(--corallo)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700, borderTop: '1px dashed var(--linea)', paddingTop: 18 }}>
-            Delivery (separato dalla sala)
-          </h3>
-          <div className="form-grid">
-            <div className="field">
-              <label>Delivery €</label>
-              <input type="number" step="0.01" value={form.delivery_eur} onChange={(e) => update('delivery_eur', e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="field">
-              <label>Delivery LE</label>
-              <input type="number" step="0.01" value={form.delivery_egp} onChange={(e) => update('delivery_egp', e.target.value)} placeholder="0.00" />
-            </div>
-          </div>
-
-          <div className="field" style={{ marginTop: 16 }}>
-            <label>Note (opzionale)</label>
-            <textarea rows="2" value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="Eventuali annotazioni sulla serata…" />
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <button type="submit" className="btn btn-accent" disabled={salvando}>
-              {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva incasso'}
-            </button>
-            {editandoId && (
-              <button type="button" className="btn btn-ghost" onClick={annullaForm}>
-                Annulla modifica
-              </button>
-            )}
-          </div>
-        </form>
-      )}
+      {puoInserire && mostraForm && !per.inArchivio && !editandoId && moduloIncasso}
 
       <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Incassi del periodo</h3>
 
@@ -378,6 +392,7 @@ export default function Incassi() {
                     <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaRiga(r.id)}>Elimina</button>
                   </div>
                 )}
+                {editandoId === r.id && <ModuloInRiga>{moduloIncasso}</ModuloInRiga>}
               </div>
             )
           })}

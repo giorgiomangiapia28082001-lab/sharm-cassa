@@ -3,9 +3,10 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
-import { giornataServizio, confrontaStringhe } from '../lib/date'
-import { controllaDataSerata } from '../lib/anomalie'
+import { giornataServizio, confrontaStringhe, useDataServizioAggiornata } from '../lib/date'
+import { controllaDataSerata, controllaSerata } from '../lib/anomalie'
 import ConfermaAnomalia from '../lib/ConfermaAnomalia'
+import ModuloInRiga from '../lib/ModuloInRiga'
 import { usePeriodoScelto, SceltaPeriodo, AvvisoArchivio, filtraPeriodo } from '../lib/periodi'
 
 // Prima delle 5 del mattino si registra ancora la serata di ieri
@@ -21,6 +22,15 @@ const VUOTO = {
   note: '',
 }
 
+// Voci confrontate con i giorni precedenti per trovare gli importi insoliti
+const CAMPI_CHIOSCHETTO = [
+  ['eur_contanti', 'Contanti €'],
+  ['bonifici', 'Bonifici €'],
+  ['egp_pos', 'POS (carta) LE'],
+  ['egp_contanti', 'Contanti LE'],
+  ['usd_contanti', 'Dollari $'],
+]
+
 export default function Chioschetto() {
   const { profile, isMaster, isViewer, puoInserire} = useAuth()
   const toast = useToast()
@@ -32,8 +42,10 @@ export default function Chioschetto() {
   const [mostraForm, setMostraForm] = useState(!isViewer)
   const [editandoId, setEditandoId] = useState(null)
   const [tassi, setTassi] = useState({ eur_usd: 1.08, eur_egp: 60 })
-  // Avviso sulla data della serata in attesa di conferma (null = nessuno)
+  // Avviso in attesa di conferma: data, doppione o importo insolito (null = nessuno)
   const [anomalia, setAnomalia] = useState(null)
+
+  useDataServizioAggiornata(form.data, (data) => update('data', data), !editandoId)
 
   async function carica() {
     setLoading(true)
@@ -84,7 +96,6 @@ export default function Chioschetto() {
       note: r.note || '',
     })
     setEditandoId(r.id)
-    setMostraForm(true)
   }
 
   function costruisciPayload() {
@@ -103,14 +114,20 @@ export default function Chioschetto() {
     e.preventDefault()
     const payload = costruisciPayload()
 
-    // Serata nuova: la data deve essere il giorno dopo l'ultima registrata
-    // e non deve esserci già (stesso controllo degli Incassi).
-    if (!forzato && !editandoId) {
+    if (!forzato) {
+      const originale = editandoId ? righe.find((r) => r.id === editandoId) : null
+      const cambiato = !originale || CAMPI_CHIOSCHETTO.some(([campo]) => Number(originale[campo] || 0) !== payload[campo])
+
+      // Serata nuova: la data deve essere il giorno dopo l'ultima registrata
+      // e non deve esserci già (stesso controllo degli Incassi).
       setSalvando(true) // niente doppio tocco mentre si controlla la data
-      const avviso = await controllaDataSerata(supabase, 'incassi_chioschetto', payload.data)
-      if (avviso) {
+      const avvisi = [
+        editandoId ? null : await controllaDataSerata(supabase, 'incassi_chioschetto', payload.data),
+        ...(cambiato ? await controllaSerata(supabase, 'incassi_chioschetto', payload, CAMPI_CHIOSCHETTO, tassi, editandoId) : []),
+      ].filter(Boolean)
+      if (avvisi.length) {
         setSalvando(false)
-        setAnomalia({ messaggio: avviso, e })
+        setAnomalia({ messaggio: avvisi.join('\n\n'), e })
         return
       }
     }
@@ -144,6 +161,76 @@ export default function Chioschetto() {
     return [...righe].sort((a, b) => confrontaStringhe(b.created_at, a.created_at))
   }, [righe])
 
+  const moduloEntrata = (
+    <form onSubmit={salva} className={editandoId ? undefined : 'card'} style={editandoId ? undefined : { marginBottom: 28 }}>
+      {editandoId && (
+        <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
+          Stai modificando un'entrata esistente (solo Master).
+        </div>
+      )}
+      <div className="form-grid">
+        <div className="field">
+          <label>Data</label>
+          <input type="date" value={form.data} onChange={(e) => update('data', e.target.value)} required />
+        </div>
+      </div>
+
+      <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
+        Euro (EUR)
+      </h3>
+      <div className="form-grid">
+        <div className="field">
+          <label>Contanti €</label>
+          <input type="number" step="0.01" value={form.eur_contanti} onChange={(e) => update('eur_contanti', e.target.value)} placeholder="0.00" />
+        </div>
+        <div className="field">
+          <label>Bonifici €</label>
+          <input type="number" step="0.01" value={form.bonifici} onChange={(e) => update('bonifici', e.target.value)} placeholder="0.00" />
+        </div>
+      </div>
+
+      <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
+        Lire egiziane (EGP) — valuta principale
+      </h3>
+      <div className="form-grid">
+        <div className="field">
+          <label>POS (carta) LE</label>
+          <input type="number" step="0.01" value={form.egp_pos} onChange={(e) => update('egp_pos', e.target.value)} placeholder="0.00" />
+        </div>
+        <div className="field">
+          <label>Contanti LE</label>
+          <input type="number" step="0.01" value={form.egp_contanti} onChange={(e) => update('egp_contanti', e.target.value)} placeholder="0.00" />
+        </div>
+      </div>
+
+      <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
+        Altre valute
+      </h3>
+      <div className="form-grid">
+        <div className="field">
+          <label>Dollari $ (contanti)</label>
+          <input type="number" step="0.01" value={form.usd_contanti} onChange={(e) => update('usd_contanti', e.target.value)} placeholder="0.00" />
+        </div>
+      </div>
+
+      <div className="field" style={{ marginTop: 16 }}>
+        <label>Note (opzionale)</label>
+        <textarea rows="2" value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="Eventuali annotazioni sulla giornata…" />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+        <button type="submit" className="btn btn-accent" disabled={salvando}>
+          {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva entrata'}
+        </button>
+        {editandoId && (
+          <button type="button" className="btn btn-ghost" onClick={annullaForm}>
+            Annulla modifica
+          </button>
+        )}
+      </div>
+    </form>
+  )
+
   return (
     <div>
       <div className="page-header">
@@ -163,75 +250,7 @@ export default function Chioschetto() {
 
       <AvvisoArchivio periodo={per.periodo} onTornaAlCorrente={() => per.scegli(null)} />
 
-      {puoInserire && mostraForm && (!per.inArchivio || editandoId) && (
-        <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
-          {editandoId && (
-            <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
-              Stai modificando un'entrata esistente (solo Master).
-            </div>
-          )}
-          <div className="form-grid">
-            <div className="field">
-              <label>Data</label>
-              <input type="date" value={form.data} onChange={(e) => update('data', e.target.value)} required />
-            </div>
-          </div>
-
-          <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
-            Euro (EUR)
-          </h3>
-          <div className="form-grid">
-            <div className="field">
-              <label>Contanti €</label>
-              <input type="number" step="0.01" value={form.eur_contanti} onChange={(e) => update('eur_contanti', e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="field">
-              <label>Bonifici €</label>
-              <input type="number" step="0.01" value={form.bonifici} onChange={(e) => update('bonifici', e.target.value)} placeholder="0.00" />
-            </div>
-          </div>
-
-          <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
-            Lire egiziane (EGP) — valuta principale
-          </h3>
-          <div className="form-grid">
-            <div className="field">
-              <label>POS (carta) LE</label>
-              <input type="number" step="0.01" value={form.egp_pos} onChange={(e) => update('egp_pos', e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="field">
-              <label>Contanti LE</label>
-              <input type="number" step="0.01" value={form.egp_contanti} onChange={(e) => update('egp_contanti', e.target.value)} placeholder="0.00" />
-            </div>
-          </div>
-
-          <h3 style={{ fontSize: 15, color: 'var(--inchiostro-soft)', margin: '20px 0 10px', fontFamily: 'var(--font-body)', fontWeight: 700 }}>
-            Altre valute
-          </h3>
-          <div className="form-grid">
-            <div className="field">
-              <label>Dollari $ (contanti)</label>
-              <input type="number" step="0.01" value={form.usd_contanti} onChange={(e) => update('usd_contanti', e.target.value)} placeholder="0.00" />
-            </div>
-          </div>
-
-          <div className="field" style={{ marginTop: 16 }}>
-            <label>Note (opzionale)</label>
-            <textarea rows="2" value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="Eventuali annotazioni sulla giornata…" />
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <button type="submit" className="btn btn-accent" disabled={salvando}>
-              {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva entrata'}
-            </button>
-            {editandoId && (
-              <button type="button" className="btn btn-ghost" onClick={annullaForm}>
-                Annulla modifica
-              </button>
-            )}
-          </div>
-        </form>
-      )}
+      {puoInserire && mostraForm && !per.inArchivio && !editandoId && moduloEntrata}
 
       <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--notte)' }}>Entrate del periodo</h3>
 
@@ -314,6 +333,7 @@ export default function Chioschetto() {
                     <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaRiga(r.id)}>Elimina</button>
                   </div>
                 )}
+                {editandoId === r.id && <ModuloInRiga>{moduloEntrata}</ModuloInRiga>}
               </div>
             )
           })}

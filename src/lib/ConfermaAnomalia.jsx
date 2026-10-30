@@ -1,6 +1,6 @@
 // ============================================================================
-// Piccolo modale di conferma usato quando controllaPrezzoPersona() o
-// controllaCambioValuta() rilevano un valore fuori dal range plausibile.
+// Piccolo modale di conferma usato quando i controlli di anomalie.js trovano
+// un dato sospetto (importo insolito, doppione, data da controllare).
 // Non blocca l'inserimento: chiede solo "sei sicuro?" con il dettaglio
 // dell'anomalia, poi lascia scegliere se correggere o confermare.
 // ============================================================================

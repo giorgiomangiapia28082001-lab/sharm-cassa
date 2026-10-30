@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import ModuloInRiga from '../lib/ModuloInRiga'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../lib/Toast'
@@ -123,9 +124,8 @@ export default function Inventario() {
       prezzo_unitario: a.prezzo_unitario ?? '', valuta: a.valuta, note: a.note || '', quantita_iniziale: '',
     })
     setEditandoId(a.id)
-    setMostraForm(true)
+    setMostraForm(false)
     setInConteggio(false)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function salvaArticolo(e) {
@@ -228,6 +228,62 @@ export default function Inventario() {
     )
   }
 
+  const moduloArticolo = (
+    <form onSubmit={salvaArticolo} className={editandoId ? undefined : 'card'} style={editandoId ? undefined : { marginBottom: 22 }}>
+      <h3 style={{ fontSize: 15, marginBottom: 14, fontFamily: 'var(--font-body)', fontWeight: 700 }}>
+        {editandoId ? 'Modifica articolo' : 'Nuovo articolo'}
+      </h3>
+      <div className="form-grid">
+        <div className="field" style={{ gridColumn: 'span 2' }}>
+          <label>Nome</label>
+          <input type="text" value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="es. Olio di semi, Coca Cola 33cl…" required />
+        </div>
+        <div className="field">
+          <label>Categoria</label>
+          <input type="text" list="categorie-inventario" value={form.categoria} onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))} placeholder="es. Bevande" />
+          <datalist id="categorie-inventario">
+            {[...new Set([...categorie.filter((c) => c !== 'Senza categoria'), ...CATEGORIE_SUGGERITE])].map((c) => <option key={c} value={c} />)}
+          </datalist>
+        </div>
+        <div className="field">
+          <label>Unità di misura</label>
+          <select value={form.unita} onChange={(e) => setForm((f) => ({ ...f, unita: e.target.value }))}>
+            {UNITA.map((u) => <option key={u} value={u}>{u}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>Scorta minima (avviso sotto questa quantità)</label>
+          <input type="number" step="any" min="0" inputMode="decimal" value={form.scorta_minima} onChange={(e) => setForm((f) => ({ ...f, scorta_minima: e.target.value }))} placeholder="0" />
+        </div>
+        <div className="field">
+          <label>Prezzo per unità (facoltativo)</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input type="number" step="any" min="0" inputMode="decimal" value={form.prezzo_unitario} onChange={(e) => setForm((f) => ({ ...f, prezzo_unitario: e.target.value }))} placeholder="0" style={{ flex: 1 }} />
+            <select value={form.valuta} onChange={(e) => setForm((f) => ({ ...f, valuta: e.target.value }))} style={{ width: 78, flex: '0 0 auto' }}>
+              <option value="EGP">LE</option>
+              <option value="EUR">€</option>
+              <option value="USD">$</option>
+            </select>
+          </div>
+        </div>
+        {!editandoId && (
+          <div className="field">
+            <label>Quantità che c'è adesso (facoltativo)</label>
+            <input type="number" step="any" min="0" inputMode="decimal" value={form.quantita_iniziale} onChange={(e) => setForm((f) => ({ ...f, quantita_iniziale: e.target.value }))} placeholder="da contare" />
+          </div>
+        )}
+        <div className="field" style={{ gridColumn: 'span 2' }}>
+          <label>Note (facoltativo)</label>
+          <input type="text" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="es. fornitore, dove si trova…" />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+        <button type="submit" className="btn btn-accent" disabled={salvando}>{salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Aggiungi articolo'}</button>
+        <button type="button" className="btn btn-ghost" onClick={() => { setMostraForm(false); setEditandoId(null) }}>Annulla</button>
+      </div>
+    </form>
+  )
+
   return (
     <div>
       <div className="page-header">
@@ -246,61 +302,7 @@ export default function Inventario() {
       </div>
 
       {/* ── NUOVO / MODIFICA ARTICOLO ── */}
-      {mostraForm && (
-        <form onSubmit={salvaArticolo} className="card" style={{ marginBottom: 22 }}>
-          <h3 style={{ fontSize: 15, marginBottom: 14, fontFamily: 'var(--font-body)', fontWeight: 700 }}>
-            {editandoId ? 'Modifica articolo' : 'Nuovo articolo'}
-          </h3>
-          <div className="form-grid">
-            <div className="field" style={{ gridColumn: 'span 2' }}>
-              <label>Nome</label>
-              <input type="text" value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="es. Olio di semi, Coca Cola 33cl…" required />
-            </div>
-            <div className="field">
-              <label>Categoria</label>
-              <input type="text" list="categorie-inventario" value={form.categoria} onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))} placeholder="es. Bevande" />
-              <datalist id="categorie-inventario">
-                {[...new Set([...categorie.filter((c) => c !== 'Senza categoria'), ...CATEGORIE_SUGGERITE])].map((c) => <option key={c} value={c} />)}
-              </datalist>
-            </div>
-            <div className="field">
-              <label>Unità di misura</label>
-              <select value={form.unita} onChange={(e) => setForm((f) => ({ ...f, unita: e.target.value }))}>
-                {UNITA.map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Scorta minima (avviso sotto questa quantità)</label>
-              <input type="number" step="any" min="0" inputMode="decimal" value={form.scorta_minima} onChange={(e) => setForm((f) => ({ ...f, scorta_minima: e.target.value }))} placeholder="0" />
-            </div>
-            <div className="field">
-              <label>Prezzo per unità (facoltativo)</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="number" step="any" min="0" inputMode="decimal" value={form.prezzo_unitario} onChange={(e) => setForm((f) => ({ ...f, prezzo_unitario: e.target.value }))} placeholder="0" style={{ flex: 1 }} />
-                <select value={form.valuta} onChange={(e) => setForm((f) => ({ ...f, valuta: e.target.value }))} style={{ width: 78, flex: '0 0 auto' }}>
-                  <option value="EGP">LE</option>
-                  <option value="EUR">€</option>
-                  <option value="USD">$</option>
-                </select>
-              </div>
-            </div>
-            {!editandoId && (
-              <div className="field">
-                <label>Quantità che c'è adesso (facoltativo)</label>
-                <input type="number" step="any" min="0" inputMode="decimal" value={form.quantita_iniziale} onChange={(e) => setForm((f) => ({ ...f, quantita_iniziale: e.target.value }))} placeholder="da contare" />
-              </div>
-            )}
-            <div className="field" style={{ gridColumn: 'span 2' }}>
-              <label>Note (facoltativo)</label>
-              <input type="text" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="es. fornitore, dove si trova…" />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-            <button type="submit" className="btn btn-accent" disabled={salvando}>{salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Aggiungi articolo'}</button>
-            <button type="button" className="btn btn-ghost" onClick={() => { setMostraForm(false); setEditandoId(null) }}>Annulla</button>
-          </div>
-        </form>
-      )}
+      {mostraForm && !editandoId && moduloArticolo}
 
       {/* ── MODALITÀ INVENTARIO ── */}
       {inConteggio && (
@@ -440,6 +442,8 @@ export default function Inventario() {
                         {isMaster && <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto' }} onClick={() => apriModifica(a)}>Modifica</button>}
                         {isMaster && <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 auto', color: 'var(--corallo)' }} onClick={() => togliArticolo(a)}>Togli</button>}
                       </div>
+
+                      {editandoId === a.id && <ModuloInRiga>{moduloArticolo}</ModuloInRiga>}
 
                       {storicoAperto === a.id && (
                         <div style={{ marginTop: 10 }}>

@@ -611,3 +611,11 @@ html, body, #root { max-width: 100%; overflow-x: hidden; }
 .field input[type="date"]::-webkit-calendar-picker-indicator {
   margin-left: 0;
 }
+
+/* Modulo di modifica aperto sotto la riga scelta */
+.modulo-in-riga {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 2px solid var(--notte);
+  scroll-margin-top: 84px;
+}

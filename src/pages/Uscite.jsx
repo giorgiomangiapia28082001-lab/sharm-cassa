@@ -5,9 +5,12 @@ import { useToast } from '../lib/Toast'
 import { esegui, avvisaSeOffline } from '../lib/operazioni'
 import { useTassi, tassiSicuri } from '../lib/tassi'
 import { caricaAllegato } from '../lib/foto'
+import { controllaUscita } from '../lib/anomalie'
+import ConfermaAnomalia from '../lib/ConfermaAnomalia'
+import ModuloInRiga from '../lib/ModuloInRiga'
 import { usePeriodoScelto, SceltaPeriodo, AvvisoArchivio, filtraPeriodo } from '../lib/periodi'
 
-import { giornataServizio } from '../lib/date'
+import { giornataServizio, useDataServizioAggiornata } from '../lib/date'
 
 // Prima delle 5 del mattino si registra ancora la serata di ieri
 const oggi = giornataServizio
@@ -38,6 +41,10 @@ export default function Uscite() {
   const [editandoGeneratoDaAcconto, setEditandoGeneratoDaAcconto] = useState(false)
 
   const [form, setForm] = useState(() => ({ ...VUOTO, data: oggi() }))
+  // Avviso in attesa di conferma (doppione o importo insolito). null = nessuno.
+  const [anomalia, setAnomalia] = useState(null)
+
+  useDataServizioAggiornata(form.data, (data) => update('data', data), !editandoId)
 
   async function carica() {
     setLoading(true)
@@ -95,12 +102,30 @@ export default function Uscite() {
     })
     setEditandoId(r.id)
     setEditandoGeneratoDaAcconto(!!r.generato_da_acconto_id)
-    setMostraForm(true)
   }
 
-  async function salva(e) {
+  async function salva(e, forzato = false) {
     e.preventDefault()
     setSalvando(true)
+
+    // Doppioni e importi insoliti: se ce ne sono si chiede conferma prima di
+    // salvare (e prima di caricare la foto). Le uscite degli acconti si
+    // correggono dai Dipendenti, quindi qui non si controllano.
+    if (!forzato && !editandoGeneratoDaAcconto) {
+      const originale = editandoId ? righe.find((r) => r.id === editandoId) : null
+      const cambiata = !originale || originale.data !== form.data || originale.descrizione !== form.descrizione ||
+        originale.valuta !== form.valuta || Number(originale.importo) !== Number(form.importo) ||
+        originale.categoria_id !== form.categoria_id
+      if (cambiata) {
+        const avvisi = await controllaUscita(supabase, { ...form, importo: Number(form.importo) || 0 }, tassi, editandoId)
+        if (avvisi.length) {
+          setSalvando(false)
+          setAnomalia({ messaggio: avvisi.join('\n\n'), e })
+          return
+        }
+      }
+    }
+    setAnomalia(null)
 
     let foto_url = null
     if (form.foto) {
@@ -174,6 +199,73 @@ export default function Uscite() {
 
   const simboloValuta = { EUR: '€', USD: '$', EGP: 'LE' }
 
+  const moduloUscita = (
+    <form onSubmit={salva} className={editandoId ? undefined : 'card'} style={editandoId ? undefined : { marginBottom: 28 }}>
+      {editandoId && (
+        <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
+          Stai modificando un'uscita esistente.
+          {editandoGeneratoDaAcconto && ' Questa riga è collegata a un acconto dipendente: il residuo verrà aggiornato automaticamente.'}
+        </div>
+      )}
+      <div className="form-grid">
+        <div className="field">
+          <label>Data</label>
+          <input type="date" value={form.data} onChange={(e) => update('data', e.target.value)} required />
+        </div>
+        <div className="field" style={{ gridColumn: 'span 2' }}>
+          <label>Descrizione</label>
+          <input type="text" value={form.descrizione} onChange={(e) => update('descrizione', e.target.value)} placeholder="es. Pollo, olio, manutenzione frigo…" required />
+        </div>
+        <div className="field">
+          <label>Categoria</label>
+          <select value={form.categoria_id} onChange={(e) => update('categoria_id', e.target.value)} required>
+            {categorie.map((c) => (
+              <option key={c.id} value={c.id}>{c.nome}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="form-grid" style={{ marginTop: 16 }}>
+        <div className="field">
+          <label>Valuta</label>
+          <select value={form.valuta} onChange={(e) => update('valuta', e.target.value)}>
+            <option value="EGP">Lire egiziane (LE)</option>
+            <option value="EUR">Euro (€)</option>
+            <option value="USD">Dollari ($)</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Importo</label>
+          <input type="number" step="0.01" value={form.importo} onChange={(e) => update('importo', e.target.value)} placeholder="0.00" required />
+        </div>
+        <div className="field">
+          <label>Metodo</label>
+          <select value={form.metodo_pagamento} onChange={(e) => update('metodo_pagamento', e.target.value)}>
+            <option value="contanti">Contanti</option>
+            <option value="pos">POS</option>
+            <option value="bonifico">Bonifico</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Foto scontrino {editandoId ? '(lascia vuoto per non cambiarla)' : '(opzionale)'}</label>
+          <input type="file" accept="image/*" capture="environment" onChange={(e) => update('foto', e.target.files[0])} />
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+        <button type="submit" className="btn btn-accent" disabled={salvando}>
+          {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva uscita'}
+        </button>
+        {editandoId && (
+          <button type="button" className="btn btn-ghost" onClick={annullaForm}>
+            Annulla modifica
+          </button>
+        )}
+      </div>
+    </form>
+  )
+
   return (
     <div>
       <div className="page-header">
@@ -193,72 +285,7 @@ export default function Uscite() {
 
       <AvvisoArchivio periodo={per.periodo} onTornaAlCorrente={() => per.scegli(null)} />
 
-      {puoInserire && mostraForm && (!per.inArchivio || editandoId) && (
-        <form onSubmit={salva} className="card" style={{ marginBottom: 28 }}>
-          {editandoId && (
-            <div style={{ marginBottom: 16, padding: '8px 14px', background: 'var(--sabbia-chiara)', borderRadius: 8, fontSize: 13.5, color: 'var(--notte)' }}>
-              Stai modificando un'uscita esistente.
-              {editandoGeneratoDaAcconto && ' Questa riga è collegata a un acconto dipendente: il residuo verrà aggiornato automaticamente.'}
-            </div>
-          )}
-          <div className="form-grid">
-            <div className="field">
-              <label>Data</label>
-              <input type="date" value={form.data} onChange={(e) => update('data', e.target.value)} required />
-            </div>
-            <div className="field" style={{ gridColumn: 'span 2' }}>
-              <label>Descrizione</label>
-              <input type="text" value={form.descrizione} onChange={(e) => update('descrizione', e.target.value)} placeholder="es. Pollo, olio, manutenzione frigo…" required />
-            </div>
-            <div className="field">
-              <label>Categoria</label>
-              <select value={form.categoria_id} onChange={(e) => update('categoria_id', e.target.value)} required>
-                {categorie.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nome}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="form-grid" style={{ marginTop: 16 }}>
-            <div className="field">
-              <label>Valuta</label>
-              <select value={form.valuta} onChange={(e) => update('valuta', e.target.value)}>
-                <option value="EGP">Lire egiziane (LE)</option>
-                <option value="EUR">Euro (€)</option>
-                <option value="USD">Dollari ($)</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Importo</label>
-              <input type="number" step="0.01" value={form.importo} onChange={(e) => update('importo', e.target.value)} placeholder="0.00" required />
-            </div>
-            <div className="field">
-              <label>Metodo</label>
-              <select value={form.metodo_pagamento} onChange={(e) => update('metodo_pagamento', e.target.value)}>
-                <option value="contanti">Contanti</option>
-                <option value="pos">POS</option>
-                <option value="bonifico">Bonifico</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Foto scontrino {editandoId ? '(lascia vuoto per non cambiarla)' : '(opzionale)'}</label>
-              <input type="file" accept="image/*" capture="environment" onChange={(e) => update('foto', e.target.files[0])} />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <button type="submit" className="btn btn-accent" disabled={salvando}>
-              {salvando ? 'Salvataggio…' : editandoId ? 'Salva modifiche' : 'Salva uscita'}
-            </button>
-            {editandoId && (
-              <button type="button" className="btn btn-ghost" onClick={annullaForm}>
-                Annulla modifica
-              </button>
-            )}
-          </div>
-        </form>
-      )}
+      {puoInserire && mostraForm && !per.inArchivio && !editandoId && moduloUscita}
 
       {/* ── RIEPILOGO PER CATEGORIA ── */}
       {!loading && righe.length > 0 && (() => {
@@ -403,10 +430,17 @@ export default function Uscite() {
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--corallo)' }} onClick={() => eliminaRiga(r)}>Elimina</button>
                 </div>
               )}
+              {editandoId === r.id && <ModuloInRiga>{moduloUscita}</ModuloInRiga>}
             </div>
           ))}
         </div>
       )}
+
+      <ConfermaAnomalia
+        messaggio={anomalia?.messaggio}
+        onConferma={() => anomalia?.e && salva(anomalia.e, true)}
+        onAnnulla={() => setAnomalia(null)}
+      />
     </div>
   )
 }
